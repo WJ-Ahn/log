@@ -165,8 +165,7 @@ textarea {
   display: flex;
   gap: 8px;
 }
-.toolbar #searchInput { flex: 2; }
-.toolbar #tagFilter { flex: 1; }
+.toolbar #searchInput { flex: 1; }
 .toolbar .btn-ghost { flex-shrink: 0; }
 
 /* Log list */
@@ -221,23 +220,7 @@ textarea {
   font-size: 0.95rem;
   line-height: 1.55;
   white-space: pre-wrap;
-  margin-bottom: 8px;
-}
-
-.log-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.tag-chip {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 9px;
+  margin-bottom: 0;
 }
 
 .empty-state {

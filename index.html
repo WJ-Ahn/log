@@ -19,7 +19,6 @@
         <input type="time" id="entryTime" class="mono-input">
       </div>
       <textarea id="entryBody" placeholder="오늘 기록할 내용을 적어주세요" rows="3"></textarea>
-      <input type="text" id="entryTags" placeholder="태그 (쉼표로 구분, 예: 업무, 아이디어)">
       <div class="composer-actions">
         <span id="editingIndicator" class="editing-indicator hidden">항목 수정 중</span>
         <button id="cancelEditBtn" class="btn-ghost small hidden">취소</button>
@@ -28,10 +27,7 @@
     </section>
 
     <section class="toolbar">
-      <input type="text" id="searchInput" placeholder="검색 (본문, 태그)">
-      <select id="tagFilter">
-        <option value="">전체 태그</option>
-      </select>
+      <input type="text" id="searchInput" placeholder="검색 (본문, #태그)">
       <button id="refreshBtn" class="btn-ghost small" title="다시 불러오기">↻</button>
     </section>
 

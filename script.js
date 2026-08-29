@@ -28,13 +28,11 @@ const statusBar = el('statusBar');
 const entryDate = el('entryDate');
 const entryTime = el('entryTime');
 const entryBody = el('entryBody');
-const entryTags = el('entryTags');
 const saveBtn = el('saveBtn');
 const cancelEditBtn = el('cancelEditBtn');
 const editingIndicator = el('editingIndicator');
 
 const searchInput = el('searchInput');
-const tagFilter = el('tagFilter');
 const refreshBtn = el('refreshBtn');
 const logList = el('logList');
 const emptyState = el('emptyState');
@@ -63,7 +61,6 @@ window.addEventListener('load', () => {
   cancelEditBtn.addEventListener('click', exitEditMode);
   refreshBtn.addEventListener('click', () => loadLogs(true));
   searchInput.addEventListener('input', renderList);
-  tagFilter.addEventListener('change', renderList);
 });
 
 function requestSignIn() {
@@ -162,7 +159,6 @@ async function loadLogs(manual = false) {
     if (!res.ok) throw new Error('불러오기 실패');
     const text = await res.text();
     logs = text.trim() ? JSON.parse(text) : [];
-    renderTagFilter();
     renderList();
     if (manual) showStatus('불러왔어요');
   } catch (err) {
@@ -193,11 +189,6 @@ async function handleSave() {
     return;
   }
 
-  const tags = entryTags.value
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
-
   saveBtn.disabled = true;
   try {
     if (editingId) {
@@ -205,20 +196,17 @@ async function handleSave() {
       target.date = entryDate.value;
       target.time = entryTime.value;
       target.body = body;
-      target.tags = tags;
     } else {
       logs.unshift({
         id: crypto.randomUUID(),
         date: entryDate.value,
         time: entryTime.value,
         body,
-        tags,
       });
     }
     await persistLogs();
     showStatus(editingId ? '수정했어요' : '기록했어요');
     exitEditMode();
-    renderTagFilter();
     renderList();
   } catch (err) {
     console.error(err);
@@ -235,7 +223,6 @@ function enterEditMode(id) {
   entryDate.value = target.date;
   entryTime.value = target.time;
   entryBody.value = target.body;
-  entryTags.value = target.tags.join(', ');
   editingIndicator.classList.remove('hidden');
   cancelEditBtn.classList.remove('hidden');
   saveBtn.textContent = '수정 완료';
@@ -245,7 +232,6 @@ function enterEditMode(id) {
 function exitEditMode() {
   editingId = null;
   entryBody.value = '';
-  entryTags.value = '';
   setDefaultDateTime();
   editingIndicator.classList.add('hidden');
   cancelEditBtn.classList.add('hidden');
@@ -260,7 +246,6 @@ async function deleteLog(id) {
   try {
     await persistLogs();
     showStatus('삭제했어요');
-    renderTagFilter();
     renderList();
   } catch (err) {
     console.error(err);
@@ -271,35 +256,15 @@ async function deleteLog(id) {
 /* ==========================================================
    렌더링
    ========================================================== */
-function renderTagFilter() {
-  const allTags = new Set();
-  logs.forEach((l) => l.tags.forEach((t) => allTags.add(t)));
-  const current = tagFilter.value;
-  tagFilter.innerHTML = '<option value="">전체 태그</option>';
-  [...allTags].sort().forEach((t) => {
-    const opt = document.createElement('option');
-    opt.value = t;
-    opt.textContent = t;
-    tagFilter.appendChild(opt);
-  });
-  tagFilter.value = allTags.has(current) ? current : '';
-}
-
 function renderList() {
   const query = searchInput.value.trim().toLowerCase();
-  const tag = tagFilter.value;
 
   const sorted = [...logs].sort((a, b) =>
     `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)
   );
 
   const filtered = sorted.filter((l) => {
-    const matchesQuery =
-      !query ||
-      l.body.toLowerCase().includes(query) ||
-      l.tags.some((t) => t.toLowerCase().includes(query));
-    const matchesTag = !tag || l.tags.includes(tag);
-    return matchesQuery && matchesTag;
+    return !query || l.body.toLowerCase().includes(query);
   });
 
   logList.innerHTML = '';
@@ -317,13 +282,6 @@ function renderList() {
         </span>
       </div>
       <div class="log-body">${escapeHtml(l.body)}</div>
-      ${
-        l.tags.length
-          ? `<div class="log-tags">${l.tags
-              .map((t) => `<span class="tag-chip">#${escapeHtml(t)}</span>`)
-              .join('')}</div>`
-          : ''
-      }
     `;
     logList.appendChild(item);
   });
