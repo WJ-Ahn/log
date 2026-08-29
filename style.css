@@ -53,8 +53,8 @@ body {
 
 .btn-primary {
   background: transparent;
-  color: var(--accent);
-  border: 1px solid var(--accent);
+  color: var(--text);
+  border: 1px solid var(--input-border);
 }
 .btn-primary:disabled {
   opacity: 0.5;
@@ -283,8 +283,4 @@ textarea {
 .status-bar.error {
   border-color: var(--danger);
   color: var(--danger);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brand-mark { animation: none; }
 }
