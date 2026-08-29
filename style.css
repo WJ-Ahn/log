@@ -52,8 +52,9 @@ body {
 .btn-ghost:active { background: var(--hover-bg); }
 
 .btn-primary {
-  background: var(--accent);
-  color: #0f1f18;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 .btn-primary:disabled {
   opacity: 0.5;
@@ -137,7 +138,6 @@ body {
 /* Composer */
 .composer {
   background: transparent;
-  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px;
   display: flex;

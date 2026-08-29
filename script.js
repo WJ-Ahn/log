@@ -249,7 +249,7 @@ function exitEditMode() {
   setDefaultDateTime();
   editingIndicator.classList.add('hidden');
   cancelEditBtn.classList.add('hidden');
-  saveBtn.textContent = '기록하기';
+  saveBtn.textContent = '등록';
 }
 
 async function deleteLog(id) {
