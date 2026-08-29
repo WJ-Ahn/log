@@ -13,31 +13,37 @@
 
   <main id="app" class="app hidden">
 
-    <section class="composer">
-      <div class="composer-row">
-        <input type="date" id="entryDate" class="mono-input">
-        <input type="time" id="entryTime" class="mono-input">
-      </div>
-      <textarea id="entryBody" placeholder="오늘 기록할 내용을 적어주세요" rows="3"></textarea>
-      <div class="composer-actions">
-        <span id="editingIndicator" class="editing-indicator hidden">항목 수정 중</span>
-        <button id="cancelEditBtn" class="btn-ghost small hidden">취소</button>
-        <button id="saveBtn" class="btn-primary">기록하기</button>
-      </div>
+    <section id="composeView" class="view">
+      <section class="composer">
+        <div class="composer-row">
+          <input type="date" id="entryDate" class="mono-input">
+          <input type="time" id="entryTime" class="mono-input">
+        </div>
+        <textarea id="entryBody" placeholder="오늘 기록할 내용을 적어주세요" rows="3"></textarea>
+        <div class="composer-actions">
+          <span id="editingIndicator" class="editing-indicator hidden">항목 수정 중</span>
+          <button id="cancelEditBtn" class="btn-ghost small hidden">취소</button>
+          <button id="saveBtn" class="btn-primary">기록하기</button>
+        </div>
+      </section>
     </section>
 
-    <section class="toolbar">
-      <input type="text" id="searchInput" placeholder="검색 (본문, #태그)">
-      <button id="refreshBtn" class="btn-ghost small" title="다시 불러오기">↻</button>
-    </section>
+    <section id="listView" class="view hidden">
+      <section class="toolbar">
+        <input type="text" id="searchInput" placeholder="검색 (본문, #태그)">
+        <button id="refreshBtn" class="btn-ghost small" title="다시 불러오기">↻</button>
+      </section>
 
-    <section class="log-list" id="logList">
-      <!-- entries rendered here -->
-    </section>
+      <section class="log-list" id="logList">
+        <!-- entries rendered here -->
+      </section>
 
-    <p id="emptyState" class="empty-state hidden">아직 기록이 없어요. 첫 로그를 남겨보세요.</p>
+      <p id="emptyState" class="empty-state hidden">아직 기록이 없어요. 첫 로그를 남겨보세요.</p>
+    </section>
 
   </main>
+
+  <button id="viewToggleBtn" class="fab hidden" title="화면 전환">⇄</button>
 
   <div id="statusBar" class="status-bar hidden"></div>
 

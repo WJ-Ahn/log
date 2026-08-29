@@ -34,6 +34,10 @@ const editingIndicator = el('editingIndicator');
 
 const searchInput = el('searchInput');
 const refreshBtn = el('refreshBtn');
+
+const composeView = el('composeView');
+const listView = el('listView');
+const viewToggleBtn = el('viewToggleBtn');
 const logList = el('logList');
 const emptyState = el('emptyState');
 
@@ -61,6 +65,7 @@ window.addEventListener('load', () => {
   cancelEditBtn.addEventListener('click', exitEditMode);
   refreshBtn.addEventListener('click', () => loadLogs(true));
   searchInput.addEventListener('input', renderList);
+  viewToggleBtn.addEventListener('click', toggleView);
 });
 
 function requestSignIn() {
@@ -70,6 +75,7 @@ function requestSignIn() {
 async function onSignedIn() {
   gate.classList.add('hidden');
   app.classList.remove('hidden');
+  viewToggleBtn.classList.remove('hidden');
   await loadLogs();
 }
 
@@ -77,6 +83,12 @@ function setDefaultDateTime() {
   const now = new Date();
   entryDate.value = now.toISOString().slice(0, 10);
   entryTime.value = now.toTimeString().slice(0, 5);
+}
+
+function toggleView() {
+  const goingToList = composeView.classList.contains('hidden') === false;
+  composeView.classList.toggle('hidden', goingToList);
+  listView.classList.toggle('hidden', !goingToList);
 }
 
 /* ==========================================================
@@ -226,6 +238,8 @@ function enterEditMode(id) {
   editingIndicator.classList.remove('hidden');
   cancelEditBtn.classList.remove('hidden');
   saveBtn.textContent = '수정 완료';
+  composeView.classList.remove('hidden');
+  listView.classList.add('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
