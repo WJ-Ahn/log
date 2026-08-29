@@ -3,14 +3,13 @@
   --bg-raised: #1a1d29;
   --bg-input: #21243191;
   --border: #2c3040;
+  --hover-bg: #262a3a;
   --text: #e8e9ee;
   --text-dim: #8a8fa3;
   --accent: #e8a33d;
   --accent-dim: #6b5330;
   --danger: #d9634b;
-  --font-display: 'Space Grotesk', sans-serif;
-  --font-body: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-main: 'Pretendard', sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -20,7 +19,7 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-body);
+  font-family: var(--font-main);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -38,16 +37,18 @@ body {
 
 /* Buttons */
 .btn-primary, .btn-ghost {
-  font-family: var(--font-body);
-  font-weight: 600;
+  font-family: var(--font-main);
+  font-weight: 700;
   font-size: 0.88rem;
   border-radius: 10px;
   border: none;
   cursor: pointer;
   padding: 11px 16px;
-  transition: transform 0.08s ease, opacity 0.15s ease;
+  min-height: 44px;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
 }
-.btn-primary:active, .btn-ghost:active { transform: scale(0.97); }
+.btn-primary:active { background: #d4923a; }
+.btn-ghost:active { background: var(--hover-bg); }
 
 .btn-primary {
   background: var(--accent);
@@ -66,6 +67,7 @@ body {
 
 .btn-ghost.small, .btn-primary.small {
   padding: 7px 10px;
+  min-height: 38px;
   font-size: 0.78rem;
 }
 
@@ -81,7 +83,8 @@ body {
 .gate.hidden { display: none; }
 
 .gate-inner h2 {
-  font-family: var(--font-display);
+  font-family: var(--font-main);
+  font-weight: 800;
   font-size: 1.3rem;
   line-height: 1.5;
   margin: 18px 0 8px;
@@ -126,16 +129,15 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  transition: transform 0.08s ease;
+  transition: background-color 0.15s ease;
 }
-.fab:active { transform: scale(0.93); }
+.fab:active { background: var(--hover-bg); }
 
 /* Composer */
 .composer {
   background: var(--bg-raised);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 10px;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -153,7 +155,7 @@ input, textarea, select {
   color: var(--text);
   border-radius: 8px;
   padding: 10px 12px;
-  font-family: var(--font-body);
+  font-family: var(--font-main);
   font-size: 16px;
   width: 100%;
   outline: none;
@@ -164,7 +166,8 @@ input:focus, textarea:focus, select:focus {
 }
 
 .mono-input {
-  font-family: var(--font-mono);
+  font-family: var(--font-main);
+  font-weight: 600;
   font-size: 16px;
   color: var(--accent);
 }
@@ -183,8 +186,8 @@ textarea {
 
 .editing-indicator {
   margin-right: auto;
-  font-family: var(--font-mono);
   font-size: 0.75rem;
+  font-weight: 600;
   color: var(--accent);
 }
 
@@ -207,7 +210,6 @@ textarea {
 .log-entry {
   background: var(--bg-raised);
   border: 1px solid var(--border);
-  border-left: 2px solid var(--accent-dim);
   border-radius: 10px;
   padding: 14px;
   transition: border-color 0.15s ease;
@@ -222,8 +224,8 @@ textarea {
 }
 
 .log-timestamp {
-  font-family: var(--font-mono);
   font-size: 0.78rem;
+  font-weight: 600;
   color: var(--accent);
   letter-spacing: 0.02em;
 }
@@ -240,10 +242,14 @@ textarea {
   color: var(--text-dim);
   cursor: pointer;
   font-size: 0.95rem;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
   padding: 2px 6px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
-.icon-btn:hover { color: var(--text); }
-.icon-btn.danger:hover { color: var(--danger); }
+.icon-btn:active { background: var(--hover-bg); color: var(--text); }
+.icon-btn.danger:active { color: var(--danger); }
 
 .log-body {
   font-size: 0.95rem;
@@ -272,7 +278,6 @@ textarea {
   padding: 9px 16px;
   border-radius: 20px;
   z-index: 20;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
 }
 .status-bar.error {
   border-color: var(--danger);
