@@ -31,11 +31,6 @@ body {
 
 .hidden { display: none !important; }
 
-.brand-mark.large {
-  color: var(--accent);
-  font-size: 2.2em;
-}
-
 /* Buttons */
 .btn-primary, .btn-ghost {
   font-family: var(--font-main);
@@ -167,6 +162,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .mono-input {
+  background: transparent;
   font-family: var(--font-main);
   font-weight: 600;
   font-size: 16px;
@@ -174,6 +170,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 textarea {
+  background: transparent;
   resize: vertical;
   line-height: 1.5;
 }
