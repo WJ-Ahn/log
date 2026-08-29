@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LOG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">▍</span>
+      <h1>LOG</h1>
+    </div>
+    <button id="authBtn" class="btn-ghost">연결하기</button>
+  </header>
+
+  <main id="app" class="app hidden">
+
+    <section class="composer">
+      <div class="composer-row">
+        <input type="date" id="entryDate" class="mono-input">
+        <input type="time" id="entryTime" class="mono-input">
+      </div>
+      <textarea id="entryBody" placeholder="오늘 기록할 내용을 적어주세요" rows="3"></textarea>
+      <input type="text" id="entryTags" placeholder="태그 (쉼표로 구분, 예: 업무, 아이디어)">
+      <div class="composer-actions">
+        <span id="editingIndicator" class="editing-indicator hidden">항목 수정 중</span>
+        <button id="cancelEditBtn" class="btn-ghost small hidden">취소</button>
+        <button id="saveBtn" class="btn-primary">기록하기</button>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <input type="text" id="searchInput" placeholder="검색 (본문, 태그)">
+      <select id="tagFilter">
+        <option value="">전체 태그</option>
+      </select>
+      <button id="refreshBtn" class="btn-ghost small" title="다시 불러오기">↻</button>
+    </section>
+
+    <section class="log-list" id="logList">
+      <!-- entries rendered here -->
+    </section>
+
+    <p id="emptyState" class="empty-state hidden">아직 기록이 없어요. 첫 로그를 남겨보세요.</p>
+
+  </main>
+
+  <div id="statusBar" class="status-bar hidden"></div>
+
+  <section id="gate" class="gate">
+    <div class="gate-inner">
+      <span class="brand-mark large">▍</span>
+      <h2>로그를 시작하려면<br>구글 계정을 연결하세요</h2>
+      <p class="gate-sub">기록은 본인의 구글 드라이브 폴더에 저장됩니다.</p>
+      <button id="authBtnGate" class="btn-primary">구글 계정 연결</button>
+    </div>
+  </section>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="script.js"></script>
+</body>
+</html>
