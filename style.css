@@ -7,8 +7,8 @@
   --hover-bg: #27272a;
   --text: #ffffff;
   --text-dim: #a1a1aa;
-  --accent: #6ee7b7;
-  --accent-dim: #2f4a3d;
+  --accent: #ffffff;
+  --accent-dim: #4a4a4d;
   --danger: #f87171;
   --font-main: 'Pretendard', sans-serif;
 }
@@ -48,7 +48,7 @@ body {
   min-height: 44px;
   transition: background-color 0.15s ease, opacity 0.15s ease;
 }
-.btn-primary:active { background: #d4923a; }
+.btn-primary:active { background: #e4e4e7; }
 .btn-ghost:active { background: var(--hover-bg); }
 
 .btn-primary {
