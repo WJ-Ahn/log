@@ -22,7 +22,6 @@ const el = (id) => document.getElementById(id);
 
 const gate = el('gate');
 const app = el('app');
-const authBtn = el('authBtn');
 const authBtnGate = el('authBtnGate');
 const statusBar = el('statusBar');
 
@@ -59,7 +58,6 @@ window.addEventListener('load', () => {
     },
   });
 
-  authBtn.addEventListener('click', requestSignIn);
   authBtnGate.addEventListener('click', requestSignIn);
   saveBtn.addEventListener('click', handleSave);
   cancelEditBtn.addEventListener('click', exitEditMode);
@@ -75,8 +73,6 @@ function requestSignIn() {
 async function onSignedIn() {
   gate.classList.add('hidden');
   app.classList.remove('hidden');
-  authBtn.textContent = '연결됨';
-  authBtn.disabled = true;
   await loadLogs();
 }
 
