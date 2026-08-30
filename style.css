@@ -132,7 +132,7 @@ body {
   z-index: 30;
   width: 26px;
   min-height: 60px;
-  border: 1px solid var(--border);
+  border: none;
   background: transparent;
   color: var(--text-dim);
   display: flex;
