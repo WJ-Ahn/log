@@ -30,9 +30,32 @@
 
     <section id="listView" class="view hidden">
       <section class="toolbar">
-        <input type="text" id="searchInput" placeholder="검색 (본문, #태그)">
-        <button id="refreshBtn" class="btn-ghost small" title="다시 불러오기">↻</button>
+        <input type="text" id="searchInput">
+        <button id="menuToggleBtn" class="icon-btn" title="설정" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="7" x2="20" y2="7"></line>
+            <line x1="4" y1="12" x2="20" y2="12"></line>
+            <line x1="4" y1="17" x2="20" y2="17"></line>
+          </svg>
+        </button>
       </section>
+
+      <div id="settingsMenu" class="settings-menu">
+        <button id="refreshBtn" class="settings-menu-item">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 11a8 8 0 10-2.34 5.66"></path>
+            <polyline points="20 4 20 11 13 11"></polyline>
+          </svg>
+          <span>새로고침</span>
+        </button>
+        <button id="themeToggleBtn" class="settings-menu-item">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 3a9 9 0 000 18z" fill="currentColor" stroke="none"></path>
+          </svg>
+          <span>화면 모드</span>
+        </button>
+      </div>
 
       <section class="log-list" id="logList">
         <!-- entries rendered here -->
@@ -48,7 +71,8 @@
   <div id="statusBar" class="status-bar hidden"></div>
 
   <section id="gate" class="gate">
-    <div class="gate-inner">      
+    <div class="gate-inner">
+      <span class="brand-mark large">▍</span>
       <h2>로그를 시작하려면<br>구글 계정을 연결하세요</h2>
       <p class="gate-sub">기록은 본인의 구글 드라이브 폴더에 저장됩니다.</p>
       <button id="authBtnGate" class="btn-primary">구글 계정 연결</button>

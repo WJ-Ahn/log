@@ -34,6 +34,9 @@ const editingIndicator = el('editingIndicator');
 
 const searchInput = el('searchInput');
 const refreshBtn = el('refreshBtn');
+const menuToggleBtn = el('menuToggleBtn');
+const settingsMenu = el('settingsMenu');
+const themeToggleBtn = el('themeToggleBtn');
 
 const composeView = el('composeView');
 const listView = el('listView');
@@ -63,9 +66,15 @@ window.addEventListener('load', () => {
   authBtnGate.addEventListener('click', requestSignIn);
   saveBtn.addEventListener('click', handleSave);
   cancelEditBtn.addEventListener('click', exitEditMode);
-  refreshBtn.addEventListener('click', () => loadLogs(true));
+  refreshBtn.addEventListener('click', () => {
+    loadLogs(true);
+    closeSettingsMenu();
+  });
   searchInput.addEventListener('input', renderList);
   viewToggleBtn.addEventListener('click', toggleView);
+  menuToggleBtn.addEventListener('click', toggleSettingsMenu);
+  themeToggleBtn.addEventListener('click', toggleTheme);
+  applySavedTheme();
 });
 
 function requestSignIn() {
@@ -89,6 +98,34 @@ function toggleView() {
   const goingToList = composeView.classList.contains('hidden') === false;
   composeView.classList.toggle('hidden', goingToList);
   listView.classList.toggle('hidden', !goingToList);
+}
+
+/* ==========================================================
+   설정 메뉴 (검색 구역 ↔ 리스트 구역 사이 슬라이드다운)
+   ========================================================== */
+function toggleSettingsMenu() {
+  const open = settingsMenu.classList.toggle('open');
+  menuToggleBtn.setAttribute('aria-expanded', String(open));
+}
+
+function closeSettingsMenu() {
+  settingsMenu.classList.remove('open');
+  menuToggleBtn.setAttribute('aria-expanded', 'false');
+}
+
+/* ==========================================================
+   다크 / 화이트 모드
+   ========================================================== */
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light-mode');
+  localStorage.setItem('log_theme', isLight ? 'light' : 'dark');
+}
+
+function applySavedTheme() {
+  const saved = localStorage.getItem('log_theme');
+  if (saved === 'light') {
+    document.body.classList.add('light-mode');
+  }
 }
 
 /* ==========================================================
@@ -291,8 +328,21 @@ function renderList() {
       <div class="log-entry-head">
         <span class="log-timestamp">${l.date} ${l.time}</span>
         <span class="log-entry-actions">
-          <button class="icon-btn" data-action="edit" data-id="${l.id}" title="수정">✎</button>
-          <button class="icon-btn danger" data-action="delete" data-id="${l.id}" title="삭제">🗑</button>
+          <button class="icon-btn" data-action="edit" data-id="${l.id}" title="수정">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+            </svg>
+          </button>
+          <button class="icon-btn danger" data-action="delete" data-id="${l.id}" title="삭제">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path>
+            </svg>
+          </button>
         </span>
       </div>
       <div class="log-body">${escapeHtml(l.body)}</div>
