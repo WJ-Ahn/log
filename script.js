@@ -109,7 +109,10 @@ async function onSignedIn() {
 
 function setDefaultDateTime() {
   const now = new Date();
-  entryDate.value = now.toISOString().slice(0, 10);
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  entryDate.value = `${yyyy}-${mm}-${dd}`;
   entryTime.value = now.toTimeString().slice(0, 5);
 }
 
