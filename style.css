@@ -469,6 +469,12 @@ textarea {
   gap: 8px;
 }
 
+.calendar-log-row .icon-btn {
+  min-height: 0;
+  padding: 0;
+  margin-top: 2px;
+}
+
 .calendar-log-text {
   color: var(--text);
   white-space: pre-wrap;
