@@ -44,6 +44,19 @@ const viewToggleBtn = el('viewToggleBtn');
 const logList = el('logList');
 const emptyState = el('emptyState');
 
+const calendarView = el('calendarView');
+const calPrevBtn = el('calPrevBtn');
+const calNextBtn = el('calNextBtn');
+const calMonthLabel = el('calMonthLabel');
+const calendarGrid = el('calendarGrid');
+const calendarLogList = el('calendarLogList');
+const calendarEmptyState = el('calendarEmptyState');
+
+let calState = (() => {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() }; // month: 0~11
+})();
+
 /* ==========================================================
    초기화
    ========================================================== */
@@ -71,7 +84,9 @@ window.addEventListener('load', () => {
     closeSettingsMenu();
   });
   searchInput.addEventListener('input', renderList);
-  viewToggleBtn.addEventListener('click', toggleView);
+  viewToggleBtn.addEventListener('click', cycleView);
+  calPrevBtn.addEventListener('click', () => changeMonth(-1));
+  calNextBtn.addEventListener('click', () => changeMonth(1));
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
   applySavedTheme();
@@ -94,10 +109,31 @@ function setDefaultDateTime() {
   entryTime.value = now.toTimeString().slice(0, 5);
 }
 
-function toggleView() {
-  const goingToList = composeView.classList.contains('hidden') === false;
-  composeView.classList.toggle('hidden', goingToList);
-  listView.classList.toggle('hidden', !goingToList);
+/* ==========================================================
+   화면 전환 (작성 → 목록 → 캘린더 → 작성 ... 순환)
+   ========================================================== */
+function cycleView() {
+  const views = [composeView, listView, calendarView];
+  let currentIdx = views.findIndex((v) => !v.classList.contains('hidden'));
+  if (currentIdx === -1) currentIdx = 0;
+
+  views[currentIdx].classList.add('hidden');
+  const nextIdx = (currentIdx + 1) % views.length;
+  views[nextIdx].classList.remove('hidden');
+
+  if (views[nextIdx] === calendarView) renderCalendar();
+}
+
+function changeMonth(delta) {
+  calState.month += delta;
+  if (calState.month < 0) {
+    calState.month = 11;
+    calState.year -= 1;
+  } else if (calState.month > 11) {
+    calState.month = 0;
+    calState.year += 1;
+  }
+  renderCalendar();
 }
 
 /* ==========================================================
@@ -277,6 +313,7 @@ function enterEditMode(id) {
   saveBtn.textContent = '수정 완료';
   composeView.classList.remove('hidden');
   listView.classList.add('hidden');
+  calendarView.classList.add('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -307,6 +344,62 @@ async function deleteLog(id) {
 /* ==========================================================
    렌더링
    ========================================================== */
+function renderCalendar() {
+  const { year, month } = calState;
+  calMonthLabel.textContent = `${year}. ${String(month + 1).padStart(2, '0')}`;
+
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay(); // 0(일) ~ 6(토)
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  const datesWithLogs = new Set(
+    logs.filter((l) => l.date.startsWith(monthPrefix)).map((l) => l.date)
+  );
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  calendarGrid.innerHTML = '';
+
+  for (let i = 0; i < startWeekday; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'calendar-cell empty';
+    calendarGrid.appendChild(empty);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${monthPrefix}-${String(d).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell' + (dateStr === todayStr ? ' today' : '');
+    cell.innerHTML = `
+      <span>${d}</span>
+      ${datesWithLogs.has(dateStr) ? '<span class="calendar-dot"></span>' : ''}
+    `;
+    calendarGrid.appendChild(cell);
+  }
+
+  renderCalendarLogList(monthPrefix);
+}
+
+function renderCalendarLogList(monthPrefix) {
+  const monthLogs = logs
+    .filter((l) => l.date.startsWith(monthPrefix))
+    .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
+
+  calendarLogList.innerHTML = '';
+  calendarEmptyState.classList.toggle('hidden', monthLogs.length > 0);
+
+  monthLogs.forEach((l) => {
+    const day = parseInt(l.date.slice(-2), 10);
+    const item = document.createElement('div');
+    item.className = 'calendar-log-item';
+    item.innerHTML = `
+      <span class="calendar-log-day">${day}.</span>
+      <span class="calendar-log-text">${escapeHtml(l.body)}</span>
+    `;
+    calendarLogList.appendChild(item);
+  });
+}
+
 function renderList() {
   const query = searchInput.value.trim().toLowerCase();
 

@@ -328,3 +328,93 @@ textarea {
   border-color: var(--danger);
   color: var(--danger);
 }
+
+/* Calendar view */
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 2px;
+}
+
+.calendar-month-label {
+  font-family: var(--font-main);
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+
+.calendar-weekdays {
+  margin-bottom: 2px;
+}
+
+.calendar-weekday {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 6px 0;
+}
+
+.calendar-cell {
+  position: relative;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  padding-top: 8px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.calendar-cell.empty {
+  visibility: hidden;
+}
+
+.calendar-cell.today {
+  border: 1px solid var(--accent);
+}
+
+.calendar-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.calendar-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 2px 64px;
+}
+
+.calendar-log-item {
+  display: flex;
+  gap: 10px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.calendar-log-day {
+  font-weight: 800;
+  color: var(--accent);
+  flex-shrink: 0;
+  min-width: 26px;
+}
+
+.calendar-log-text {
+  color: var(--text);
+  white-space: pre-wrap;
+}

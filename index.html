@@ -64,6 +64,42 @@
       <p id="emptyState" class="empty-state hidden">아직 기록이 없어요. 첫 로그를 남겨보세요.</p>
     </section>
 
+    <section id="calendarView" class="view hidden">
+      <section class="calendar-header">
+        <button id="calPrevBtn" class="icon-btn" title="이전 달">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <span id="calMonthLabel" class="calendar-month-label"></span>
+        <button id="calNextBtn" class="icon-btn" title="다음 달">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </section>
+
+      <section class="calendar-grid calendar-weekdays">
+        <span class="calendar-weekday">일</span>
+        <span class="calendar-weekday">월</span>
+        <span class="calendar-weekday">화</span>
+        <span class="calendar-weekday">수</span>
+        <span class="calendar-weekday">목</span>
+        <span class="calendar-weekday">금</span>
+        <span class="calendar-weekday">토</span>
+      </section>
+
+      <section class="calendar-grid" id="calendarGrid">
+        <!-- 날짜 셀 렌더링 위치 -->
+      </section>
+
+      <section class="calendar-log-list" id="calendarLogList">
+        <!-- 이번 달 로그 목록 렌더링 위치 -->
+      </section>
+
+      <p id="calendarEmptyState" class="empty-state hidden">이 달에는 기록이 없어요.</p>
+    </section>
+
   </main>
 
   <button id="viewToggleBtn" class="fab hidden" title="화면 전환">⇄</button>
