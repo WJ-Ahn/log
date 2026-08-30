@@ -124,27 +124,35 @@ body {
   gap: 18px;
 }
 
-/* Floating prev/next view buttons — fixed to viewport center, ignore scroll height */
+/* Floating prev/next view buttons — edge tabs, fixed to viewport center regardless of scroll */
 .fab-nav {
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
   z-index: 30;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: 26px;
+  min-height: 60px;
   border: 1px solid var(--border);
   background: var(--bg-raised);
-  color: var(--accent);
+  color: var(--text-dim);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
-.fab-nav:active { background: var(--hover-bg); }
-.fab-nav-left { left: 12px; }
-.fab-nav-right { right: 12px; }
+.fab-nav:active { background: var(--hover-bg); color: var(--text); }
+
+.fab-nav-left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+}
+.fab-nav-right {
+  right: 0;
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+}
 
 /* Composer */
 .composer {
