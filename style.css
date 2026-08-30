@@ -190,6 +190,16 @@ textarea {
   line-height: 1.5;
 }
 
+/* Memo input (under the main log textarea in the composer) */
+.memo-textarea {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  border-style: dashed;
+}
+.memo-textarea:focus {
+  color: var(--text);
+}
+
 .composer-actions {
   display: flex;
   align-items: center;
@@ -295,12 +305,38 @@ textarea {
 }
 .icon-btn:active { background: var(--hover-bg); color: var(--text); }
 .icon-btn.danger:active { color: var(--danger); }
+.icon-btn.memo-active { color: var(--accent); }
 
 .log-body {
   font-size: 0.95rem;
   line-height: 1.55;
   white-space: pre-wrap;
   margin-bottom: 0;
+}
+
+/* Memo slide-down (used in both list view and calendar view) */
+.log-memo {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.log-memo.open {
+  max-height: 600px;
+}
+.log-memo-inner {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.log-memo-inner a {
+  color: var(--accent);
+  text-decoration: underline;
+  word-break: break-all;
 }
 
 .empty-state {
@@ -414,7 +450,20 @@ textarea {
   min-width: 26px;
 }
 
+.calendar-log-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.calendar-log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .calendar-log-text {
   color: var(--text);
   white-space: pre-wrap;
+  flex: 1;
 }

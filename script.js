@@ -28,6 +28,7 @@ const statusBar = el('statusBar');
 const entryDate = el('entryDate');
 const entryTime = el('entryTime');
 const entryBody = el('entryBody');
+const entryMemo = el('entryMemo');
 const saveBtn = el('saveBtn');
 const cancelEditBtn = el('cancelEditBtn');
 const editingIndicator = el('editingIndicator');
@@ -269,6 +270,7 @@ async function persistLogs() {
    ========================================================== */
 async function handleSave() {
   const body = entryBody.value.trim();
+  const memo = entryMemo.value.trim();
   if (!body) {
     showStatus('본문을 입력해주세요', true);
     return;
@@ -281,12 +283,14 @@ async function handleSave() {
       target.date = entryDate.value;
       target.time = entryTime.value;
       target.body = body;
+      target.memo = memo;
     } else {
       logs.unshift({
         id: crypto.randomUUID(),
         date: entryDate.value,
         time: entryTime.value,
         body,
+        memo,
       });
     }
     await persistLogs();
@@ -308,6 +312,7 @@ function enterEditMode(id) {
   entryDate.value = target.date;
   entryTime.value = target.time;
   entryBody.value = target.body;
+  entryMemo.value = target.memo || '';
   editingIndicator.classList.remove('hidden');
   cancelEditBtn.classList.remove('hidden');
   saveBtn.textContent = '수정 완료';
@@ -320,6 +325,7 @@ function enterEditMode(id) {
 function exitEditMode() {
   editingId = null;
   entryBody.value = '';
+  entryMemo.value = '';
   setDefaultDateTime();
   editingIndicator.classList.add('hidden');
   cancelEditBtn.classList.add('hidden');
@@ -338,6 +344,74 @@ async function deleteLog(id) {
   } catch (err) {
     console.error(err);
     showStatus('삭제 중 문제가 발생했어요', true);
+  }
+}
+
+/* ==========================================================
+   텍스트 처리 (이스케이프 + 링크 인식)
+   ========================================================== */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// 텍스트 안의 http://, https://, www. 로 시작하는 링크를 모두 찾아
+// 각각 클릭 가능한 <a> 태그로 바꾼다. 나머지 텍스트는 이스케이프 처리된다.
+function linkifyHtml(str) {
+  if (!str) return '';
+  const urlRegex = /((?:https?:\/\/|www\.)[^\s<]+)/gi;
+  let result = '';
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlRegex.exec(str)) !== null) {
+    result += escapeHtml(str.slice(lastIndex, match.index));
+
+    let url = match[0];
+    // 문장 부호가 링크 끝에 딸려오는 경우 분리 (예: "...주소.txt)." → 마지막 ). 제외)
+    let trailing = '';
+    const trailingMatch = url.match(/[),.!?;:'"]+$/);
+    if (trailingMatch) {
+      trailing = trailingMatch[0];
+      url = url.slice(0, -trailing.length);
+    }
+
+    if (url) {
+      const href = url.startsWith('www.') ? `https://${url}` : url;
+      result += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+      result += escapeHtml(trailing);
+    } else {
+      result += escapeHtml(match[0]);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  result += escapeHtml(str.slice(lastIndex));
+  return result;
+}
+
+/* ==========================================================
+   메모 아코디언 (리스트 뷰 / 캘린더 뷰 공용)
+   같은 리스트 안에서는 한 번에 하나만 열린다.
+   ========================================================== */
+function toggleMemoAccordion(containerEl, memoElId) {
+  const memoEl = document.getElementById(memoElId);
+  if (!memoEl) return;
+  const isOpen = memoEl.classList.contains('open');
+
+  containerEl.querySelectorAll('.log-memo.open').forEach((openEl) => {
+    openEl.classList.remove('open');
+  });
+  containerEl.querySelectorAll('.icon-btn.memo-active').forEach((btn) => {
+    btn.classList.remove('memo-active');
+  });
+
+  if (!isOpen) {
+    memoEl.classList.add('open');
+    const btn = containerEl.querySelector(`button[data-memo-target="${memoElId}"]`);
+    if (btn) btn.classList.add('memo-active');
   }
 }
 
@@ -390,11 +464,30 @@ function renderCalendarLogList(monthPrefix) {
 
   monthLogs.forEach((l) => {
     const day = parseInt(l.date.slice(-2), 10);
+    const hasMemo = !!(l.memo && l.memo.trim());
+    const memoElId = `cal-memo-${l.id}`;
+
     const item = document.createElement('div');
     item.className = 'calendar-log-item';
     item.innerHTML = `
       <span class="calendar-log-day">${day}.</span>
-      <span class="calendar-log-text">${escapeHtml(l.body)}</span>
+      <div class="calendar-log-content">
+        <div class="calendar-log-row">
+          <span class="calendar-log-text">${escapeHtml(l.body)}</span>
+          ${hasMemo ? `
+            <button class="icon-btn" data-action="memo" data-memo-target="${memoElId}" title="메모 보기">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16v12H8l-4 4V4z"></path>
+              </svg>
+            </button>
+          ` : ''}
+        </div>
+        ${hasMemo ? `
+          <div class="log-memo" id="${memoElId}">
+            <div class="log-memo-inner">${linkifyHtml(l.memo)}</div>
+          </div>
+        ` : ''}
+      </div>
     `;
     calendarLogList.appendChild(item);
   });
@@ -408,19 +501,32 @@ function renderList() {
   );
 
   const filtered = sorted.filter((l) => {
-    return !query || l.body.toLowerCase().includes(query);
+    if (!query) return true;
+    const inBody = l.body.toLowerCase().includes(query);
+    const inMemo = (l.memo || '').toLowerCase().includes(query);
+    return inBody || inMemo;
   });
 
   logList.innerHTML = '';
   emptyState.classList.toggle('hidden', filtered.length > 0);
 
   filtered.forEach((l) => {
+    const hasMemo = !!(l.memo && l.memo.trim());
+    const memoElId = `memo-${l.id}`;
+
     const item = document.createElement('div');
     item.className = 'log-entry';
     item.innerHTML = `
       <div class="log-entry-head">
         <span class="log-timestamp">${l.date} ${l.time}</span>
         <span class="log-entry-actions">
+          ${hasMemo ? `
+            <button class="icon-btn" data-action="memo" data-memo-target="${memoElId}" title="메모 보기">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16v12H8l-4 4V4z"></path>
+              </svg>
+            </button>
+          ` : ''}
           <button class="icon-btn" data-action="edit" data-id="${l.id}" title="수정">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 20h9"></path>
@@ -439,6 +545,11 @@ function renderList() {
         </span>
       </div>
       <div class="log-body">${escapeHtml(l.body)}</div>
+      ${hasMemo ? `
+        <div class="log-memo" id="${memoElId}">
+          <div class="log-memo-inner">${linkifyHtml(l.memo)}</div>
+        </div>
+      ` : ''}
     `;
     logList.appendChild(item);
   });
@@ -447,13 +558,16 @@ function renderList() {
 logList.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
-  const id = btn.dataset.id;
-  if (btn.dataset.action === 'edit') enterEditMode(id);
-  if (btn.dataset.action === 'delete') deleteLog(id);
+  const action = btn.dataset.action;
+  if (action === 'edit') enterEditMode(btn.dataset.id);
+  if (action === 'delete') deleteLog(btn.dataset.id);
+  if (action === 'memo') toggleMemoAccordion(logList, btn.dataset.memoTarget);
 });
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
+calendarLogList.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  if (btn.dataset.action === 'memo') {
+    toggleMemoAccordion(calendarLogList, btn.dataset.memoTarget);
+  }
+});
