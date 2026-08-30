@@ -41,7 +41,8 @@ const themeToggleBtn = el('themeToggleBtn');
 
 const composeView = el('composeView');
 const listView = el('listView');
-const viewToggleBtn = el('viewToggleBtn');
+const viewPrevBtn = el('viewPrevBtn');
+const viewNextBtn = el('viewNextBtn');
 const logList = el('logList');
 const emptyState = el('emptyState');
 
@@ -85,7 +86,8 @@ window.addEventListener('load', () => {
     closeSettingsMenu();
   });
   searchInput.addEventListener('input', renderList);
-  viewToggleBtn.addEventListener('click', cycleView);
+  viewPrevBtn.addEventListener('click', goPrevView);
+  viewNextBtn.addEventListener('click', goNextView);
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
@@ -100,7 +102,8 @@ function requestSignIn() {
 async function onSignedIn() {
   gate.classList.add('hidden');
   app.classList.remove('hidden');
-  viewToggleBtn.classList.remove('hidden');
+  viewPrevBtn.classList.remove('hidden');
+  viewNextBtn.classList.remove('hidden');
   await loadLogs();
 }
 
@@ -111,18 +114,35 @@ function setDefaultDateTime() {
 }
 
 /* ==========================================================
-   화면 전환 (작성 → 목록 → 캘린더 → 작성 ... 순환)
+   화면 전환 (작성 ↔ 목록 ↔ 캘린더, 화면별 좌/우 버튼 고정)
+   composeView: 좌-캘린더 / 우-리스트
+   listView:    좌-작성창 / 우-캘린더
+   calendarView:좌-리스트 / 우-작성창
    ========================================================== */
-function cycleView() {
-  const views = [composeView, listView, calendarView];
-  let currentIdx = views.findIndex((v) => !v.classList.contains('hidden'));
-  if (currentIdx === -1) currentIdx = 0;
+const PREV_VIEW = { compose: 'calendar', list: 'compose', calendar: 'list' };
+const NEXT_VIEW = { compose: 'list', list: 'calendar', calendar: 'compose' };
+const VIEW_EL = { compose: composeView, list: listView, calendar: calendarView };
 
-  views[currentIdx].classList.add('hidden');
-  const nextIdx = (currentIdx + 1) % views.length;
-  views[nextIdx].classList.remove('hidden');
+function getCurrentViewName() {
+  if (!composeView.classList.contains('hidden')) return 'compose';
+  if (!listView.classList.contains('hidden')) return 'list';
+  return 'calendar';
+}
 
-  if (views[nextIdx] === calendarView) renderCalendar();
+function switchToView(name) {
+  composeView.classList.add('hidden');
+  listView.classList.add('hidden');
+  calendarView.classList.add('hidden');
+  VIEW_EL[name].classList.remove('hidden');
+  if (name === 'calendar') renderCalendar();
+}
+
+function goPrevView() {
+  switchToView(PREV_VIEW[getCurrentViewName()]);
+}
+
+function goNextView() {
+  switchToView(NEXT_VIEW[getCurrentViewName()]);
 }
 
 function changeMonth(delta) {
@@ -316,9 +336,7 @@ function enterEditMode(id) {
   editingIndicator.classList.remove('hidden');
   cancelEditBtn.classList.remove('hidden');
   saveBtn.textContent = '수정 완료';
-  composeView.classList.remove('hidden');
-  listView.classList.add('hidden');
-  calendarView.classList.add('hidden');
+  switchToView('compose');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

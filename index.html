@@ -103,7 +103,16 @@
 
   </main>
 
-  <button id="viewToggleBtn" class="fab hidden" title="화면 전환">⇄</button>
+  <button id="viewPrevBtn" class="fab-nav fab-nav-left hidden" title="이전 화면">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"></polyline>
+    </svg>
+  </button>
+  <button id="viewNextBtn" class="fab-nav fab-nav-right hidden" title="다음 화면">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </button>
 
   <div id="statusBar" class="status-bar hidden"></div>
 
