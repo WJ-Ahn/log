@@ -192,7 +192,6 @@ textarea {
 
 /* Memo input (under the main log textarea in the composer) */
 .memo-textarea {
-  font-size: 0.88rem;
   color: var(--text-dim);
 }
 .memo-textarea:focus {
