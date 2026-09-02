@@ -929,16 +929,17 @@ function renderList() {
     `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)
   );
 
-  const filtered = sorted.filter((l) => {
-    if (!query) return true;
-    const inDate = l.date.includes(query);
-    const inBody = l.body.toLowerCase().includes(query);
-    const inMemo = (l.memo || '').toLowerCase().includes(query);
-    return inDate || inBody || inMemo;
-  });
+  const filtered = query
+    ? sorted.filter((l) => {
+        const inDate = l.date.includes(query);
+        const inBody = l.body.toLowerCase().includes(query);
+        const inMemo = (l.memo || '').toLowerCase().includes(query);
+        return inDate || inBody || inMemo;
+      })
+    : [];
 
   logList.innerHTML = '';
-  emptyState.classList.toggle('hidden', filtered.length > 0);
+  emptyState.classList.toggle('hidden', !query || filtered.length > 0);
 
   filtered.forEach((l) => {
     const hasMemo = !!(l.memo && l.memo.trim());
