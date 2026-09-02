@@ -827,9 +827,10 @@ function renderList() {
 
   const filtered = sorted.filter((l) => {
     if (!query) return true;
+    const inDate = l.date.includes(query);
     const inBody = l.body.toLowerCase().includes(query);
     const inMemo = (l.memo || '').toLowerCase().includes(query);
-    return inBody || inMemo;
+    return inDate || inBody || inMemo;
   });
 
   logList.innerHTML = '';
