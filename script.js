@@ -362,16 +362,26 @@ function jumpToToday() {
   renderCalendar();
 }
 
-// "2026-09", "2026.09", "202609" 등 다양한 구분자를 허용해 연/월로 해석한다.
-// 숫자 6자리(YYYYMM)로 맞아떨어지지 않거나 월이 1~12 범위를 벗어나면 null 을 반환한다.
+// 숫자만 추출해 4자리(연도만, 현재 보고 있는 달 유지) 또는 6자리(연+월)로 해석한다.
+// 둘 중 어느 자릿수에도 맞지 않거나 월이 1~12 범위를 벗어나면 null 을 반환한다.
 function parseYearMonthInput(raw) {
   if (!raw) return null;
   const digits = raw.trim().replace(/[^0-9]/g, '');
-  if (digits.length !== 6) return null;
-  const year = parseInt(digits.slice(0, 4), 10);
-  const month = parseInt(digits.slice(4, 6), 10);
-  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return null;
-  return { year, month: month - 1 };
+
+  if (digits.length === 4) {
+    const year = parseInt(digits, 10);
+    if (isNaN(year)) return null;
+    return { year, month: calState.month };
+  }
+
+  if (digits.length === 6) {
+    const year = parseInt(digits.slice(0, 4), 10);
+    const month = parseInt(digits.slice(4, 6), 10);
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return null;
+    return { year, month: month - 1 };
+  }
+
+  return null;
 }
 
 // 라벨을 감추고 그 자리에 빈 입력창을 보여준다.
