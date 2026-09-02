@@ -434,6 +434,10 @@ textarea {
 .calendar-month-input.invalid {
   color: var(--danger);
 }
+.calendar-month-input::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
 
 .calendar-grid {
   display: grid;

@@ -21,8 +21,7 @@ let logsLoaded = false;     // 드라이브에서 로그 데이터를 아직 못
 let activeListCardId = null;   // 리스트뷰에서 현재 아이콘이 노출된 카드의 id
 let listCardHideTimer = null;  // 그 카드의 2초 자동 숨김 타이머
 
-let monthLabelPressTimer = null; // 월 라벨 롱프레스 판별 타이머
-let monthLabelLongPressed = false; // 이번 누름이 롱프레스로 이미 처리됐는지
+let monthLabelPressStart = 0; // 월 라벨을 누르기 시작한 시각 (0이면 눌려있지 않음)
 
 /* ==========================================================
    DOM 참조
@@ -97,9 +96,8 @@ window.addEventListener('load', () => {
   calNextBtn.addEventListener('click', () => changeMonth(1));
   calMonthLabel.addEventListener('pointerdown', handleMonthLabelPointerDown);
   calMonthLabel.addEventListener('pointerup', handleMonthLabelPointerUp);
-  calMonthLabel.addEventListener('pointerleave', handleMonthLabelPointerUp);
-  calMonthLabel.addEventListener('pointercancel', handleMonthLabelPointerUp);
-  calMonthLabel.addEventListener('click', handleMonthLabelClick);
+  calMonthLabel.addEventListener('pointerleave', handleMonthLabelPointerCancel);
+  calMonthLabel.addEventListener('pointercancel', handleMonthLabelPointerCancel);
   calMonthLabelInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleCalMonthInputConfirm();
     else if (e.key === 'Escape') closeCalMonthInput();
@@ -335,26 +333,26 @@ async function deleteLog(id) {
 const MONTH_LABEL_LONG_PRESS_MS = 550;
 
 function handleMonthLabelPointerDown() {
-  monthLabelLongPressed = false;
-  clearTimeout(monthLabelPressTimer);
-  monthLabelPressTimer = setTimeout(() => {
-    monthLabelLongPressed = true;
-    openCalMonthInput();
-  }, MONTH_LABEL_LONG_PRESS_MS);
+  monthLabelPressStart = Date.now();
 }
 
+// 뗀 시점에 눌려있던 시간을 계산해 짧게/길게를 판별한다.
+// focus() 호출까지 이 핸들러 안에서 동기적으로 이어져야 모바일에서 키보드가 함께 올라온다
+// (setTimeout 등으로 지연시키면 사용자 제스처로 인정되지 않아 키보드가 뜨지 않는다).
 function handleMonthLabelPointerUp() {
-  clearTimeout(monthLabelPressTimer);
+  if (!monthLabelPressStart) return;
+  const elapsed = Date.now() - monthLabelPressStart;
+  monthLabelPressStart = 0;
+  if (elapsed >= MONTH_LABEL_LONG_PRESS_MS) {
+    openCalMonthInput();
+  } else {
+    jumpToToday();
+  }
 }
 
-// pointerup 이후에 발생하는 click 에서 짧게 누른 경우만 오늘로 이동시킨다.
-// (롱프레스가 이미 발동했다면 여기서는 아무것도 하지 않는다)
-function handleMonthLabelClick() {
-  if (monthLabelLongPressed) {
-    monthLabelLongPressed = false;
-    return;
-  }
-  jumpToToday();
+// 손가락이 라벨 밖으로 벗어나거나(pointerleave) 제스처가 취소되면(pointercancel) 아무 동작도 하지 않는다.
+function handleMonthLabelPointerCancel() {
+  monthLabelPressStart = 0;
 }
 
 function jumpToToday() {
@@ -376,14 +374,13 @@ function parseYearMonthInput(raw) {
   return { year, month: month - 1 };
 }
 
-// 라벨을 감추고 그 자리에 입력창을 보여준 뒤, 현재 년월 값을 채워 넣는다.
+// 라벨을 감추고 그 자리에 빈 입력창을 보여준다.
 function openCalMonthInput() {
-  calMonthLabelInput.value = `${calState.year}-${String(calState.month + 1).padStart(2, '0')}`;
+  calMonthLabelInput.value = '';
   calMonthLabelInput.classList.remove('invalid');
   calMonthLabel.classList.add('hidden');
   calMonthLabelInput.classList.remove('hidden');
   calMonthLabelInput.focus();
-  calMonthLabelInput.select();
 }
 
 // 입력창을 닫고 라벨을 다시 보여준다 (엔터로 확정된 뒤에도, 포커스를 잃어 취소된 경우에도 공통으로 사용).
