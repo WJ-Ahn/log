@@ -13,9 +13,11 @@ let accessToken = null;
 let tokenClient = null;
 let fileId = null;      // logs.json 의 구글 드라이브 파일 ID
 let logs = [];          // 메모리 상의 로그 배열
-let editingId = null;   // 현재 수정 중인 항목 id (없으면 null)
 let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
 let calEntryTimeBeforeEdit = ''; // calEntryTime 포커스 시 비우기 전의 원래 값
+
+let activeListCardId = null;   // 리스트뷰에서 현재 아이콘이 노출된 카드의 id
+let listCardHideTimer = null;  // 그 카드의 2초 자동 숨김 타이머
 
 /* ==========================================================
    DOM 참조
@@ -27,21 +29,12 @@ const app = el('app');
 const authBtnGate = el('authBtnGate');
 const statusBar = el('statusBar');
 
-const entryDate = el('entryDate');
-const entryTime = el('entryTime');
-const entryBody = el('entryBody');
-const entryMemo = el('entryMemo');
-const saveBtn = el('saveBtn');
-const cancelEditBtn = el('cancelEditBtn');
-const editingIndicator = el('editingIndicator');
-
 const searchInput = el('searchInput');
 const refreshBtn = el('refreshBtn');
 const menuToggleBtn = el('menuToggleBtn');
 const settingsMenu = el('settingsMenu');
 const themeToggleBtn = el('themeToggleBtn');
 
-const composeView = el('composeView');
 const listView = el('listView');
 const viewPrevBtn = el('viewPrevBtn');
 const viewNextBtn = el('viewNextBtn');
@@ -72,8 +65,6 @@ let calState = (() => {
    초기화
    ========================================================== */
 window.addEventListener('load', () => {
-  setDefaultDateTime();
-
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
@@ -88,8 +79,6 @@ window.addEventListener('load', () => {
   });
 
   authBtnGate.addEventListener('click', requestSignIn);
-  saveBtn.addEventListener('click', handleSave);
-  cancelEditBtn.addEventListener('click', exitEditMode);
   refreshBtn.addEventListener('click', () => {
     loadLogs(true);
     closeSettingsMenu();
@@ -119,46 +108,34 @@ async function onSignedIn() {
   await loadLogs();
 }
 
-function setDefaultDateTime() {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  entryDate.value = `${yyyy}-${mm}-${dd}`;
-  entryTime.value = now.toTimeString().slice(0, 5);
-}
-
 /* ==========================================================
-   화면 전환 (작성 ↔ 목록 ↔ 캘린더, 화면별 좌/우 버튼 고정)
-   composeView: 좌-캘린더 / 우-리스트
-   listView:    좌-작성창 / 우-캘린더
-   calendarView:좌-리스트 / 우-작성창
+   화면 전환 (리스트 ↔ 캘린더, 화면별 좌/우 버튼 고정)
    ========================================================== */
-const PREV_VIEW = { compose: 'calendar', list: 'compose', calendar: 'list' };
-const NEXT_VIEW = { compose: 'list', list: 'calendar', calendar: 'compose' };
-const VIEW_EL = { compose: composeView, list: listView, calendar: calendarView };
+const VIEW_EL = { list: listView, calendar: calendarView };
 
 function getCurrentViewName() {
-  if (!composeView.classList.contains('hidden')) return 'compose';
-  if (!listView.classList.contains('hidden')) return 'list';
-  return 'calendar';
+  return listView.classList.contains('hidden') ? 'calendar' : 'list';
 }
 
 function switchToView(name) {
   if (name !== 'calendar') closeCalComposer();
-  composeView.classList.add('hidden');
+  if (name !== 'list') closeListCardActions();
   listView.classList.add('hidden');
   calendarView.classList.add('hidden');
   VIEW_EL[name].classList.remove('hidden');
   if (name === 'calendar') renderCalendar();
 }
 
+function toggleView() {
+  switchToView(getCurrentViewName() === 'list' ? 'calendar' : 'list');
+}
+
 function goPrevView() {
-  switchToView(PREV_VIEW[getCurrentViewName()]);
+  toggleView();
 }
 
 function goNextView() {
-  switchToView(NEXT_VIEW[getCurrentViewName()]);
+  toggleView();
 }
 
 function changeMonth(delta) {
@@ -283,6 +260,7 @@ async function loadLogs(manual = false) {
     const text = await res.text();
     logs = text.trim() ? JSON.parse(text) : [];
     renderList();
+    renderCalendar();
     if (manual) showStatus('불러왔어요');
   } catch (err) {
     console.error(err);
@@ -303,70 +281,8 @@ async function persistLogs() {
 }
 
 /* ==========================================================
-   작성 / 수정 / 삭제
+   삭제 (리스트뷰 공용)
    ========================================================== */
-async function handleSave() {
-  const body = entryBody.value.trim();
-  const memo = entryMemo.value.trim();
-  if (!body) {
-    showStatus('본문을 입력해주세요', true);
-    return;
-  }
-
-  saveBtn.disabled = true;
-  try {
-    if (editingId) {
-      const target = logs.find((l) => l.id === editingId);
-      target.date = entryDate.value;
-      target.time = entryTime.value;
-      target.body = body;
-      target.memo = memo;
-    } else {
-      logs.unshift({
-        id: crypto.randomUUID(),
-        date: entryDate.value,
-        time: entryTime.value,
-        body,
-        memo,
-      });
-    }
-    await persistLogs();
-    showStatus(editingId ? '수정했어요' : '기록했어요');
-    exitEditMode();
-    renderList();
-  } catch (err) {
-    console.error(err);
-    showStatus('저장 중 문제가 발생했어요', true);
-  } finally {
-    saveBtn.disabled = false;
-  }
-}
-
-function enterEditMode(id) {
-  const target = logs.find((l) => l.id === id);
-  if (!target) return;
-  editingId = id;
-  entryDate.value = target.date;
-  entryTime.value = target.time;
-  entryBody.value = target.body;
-  entryMemo.value = target.memo || '';
-  editingIndicator.classList.remove('hidden');
-  cancelEditBtn.classList.remove('hidden');
-  saveBtn.textContent = '수정 완료';
-  switchToView('compose');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function exitEditMode() {
-  editingId = null;
-  entryBody.value = '';
-  entryMemo.value = '';
-  setDefaultDateTime();
-  editingIndicator.classList.add('hidden');
-  cancelEditBtn.classList.add('hidden');
-  saveBtn.textContent = '등록';
-}
-
 async function deleteLog(id) {
   if (!confirm('이 기록을 삭제할까요?')) return;
   const before = logs.length;
@@ -376,6 +292,7 @@ async function deleteLog(id) {
     await persistLogs();
     showStatus('삭제했어요');
     renderList();
+    renderCalendar();
   } catch (err) {
     console.error(err);
     showStatus('삭제 중 문제가 발생했어요', true);
@@ -571,8 +488,7 @@ function linkifyHtml(str) {
 }
 
 /* ==========================================================
-   메모 아코디언 (리스트 뷰 / 캘린더 뷰 공용)
-   같은 리스트 안에서는 한 번에 하나만 열린다.
+   메모 아코디언 (캘린더뷰 전용 — id 기반, 리스트뷰 안에서는 한 번에 하나만 열린다)
    ========================================================== */
 function toggleMemoAccordion(containerEl, memoElId) {
   const memoEl = document.getElementById(memoElId);
@@ -590,6 +506,142 @@ function toggleMemoAccordion(containerEl, memoElId) {
     memoEl.classList.add('open');
     const btn = containerEl.querySelector(`button[data-memo-target="${memoElId}"]`);
     if (btn) btn.classList.add('memo-active');
+  }
+}
+
+/* ==========================================================
+   리스트뷰 카드 인터랙션
+   — 카드 클릭 시 아이콘(메모/수정/삭제) 노출, 추가 액션 없으면 2초 뒤 자동 숨김
+   — 메모 또는 인라인 수정창이 열려있는 동안은 타이머 미적용
+   — 한 번에 하나의 카드만 활성화
+   ========================================================== */
+function getListCard(id) {
+  return logList.querySelector(`.log-entry[data-id="${id}"]`);
+}
+
+function scheduleListCardHide(id) {
+  clearTimeout(listCardHideTimer);
+  listCardHideTimer = setTimeout(() => {
+    const card = getListCard(id);
+    if (!card) return;
+    const memoOpen = card.querySelector('.log-memo')?.classList.contains('open');
+    const editOpen = card.querySelector('.log-edit')?.classList.contains('open');
+    if (memoOpen || editOpen) return;
+    closeListCardActions();
+  }, 2000);
+}
+
+function closeListCardActions() {
+  clearTimeout(listCardHideTimer);
+  if (!activeListCardId) return;
+  const card = getListCard(activeListCardId);
+  if (card) {
+    card.classList.remove('actions-visible');
+    card.querySelector('.log-memo')?.classList.remove('open');
+    card.querySelector('.log-edit')?.classList.remove('open');
+    card.querySelector('.icon-btn.memo-active')?.classList.remove('memo-active');
+  }
+  activeListCardId = null;
+}
+
+function openListCardActions(id) {
+  if (activeListCardId && activeListCardId !== id) {
+    closeListCardActions();
+  }
+  activeListCardId = id;
+  const card = getListCard(id);
+  if (card) card.classList.add('actions-visible');
+  scheduleListCardHide(id);
+}
+
+function toggleListCardActions(id) {
+  if (activeListCardId === id) {
+    closeListCardActions();
+  } else {
+    openListCardActions(id);
+  }
+}
+
+function toggleListMemo(id) {
+  const card = getListCard(id);
+  if (!card) return;
+  const memoEl = card.querySelector('.log-memo');
+  if (!memoEl) return;
+  const btn = card.querySelector('button[data-action="memo"]');
+  const isOpen = memoEl.classList.contains('open');
+
+  if (isOpen) {
+    memoEl.classList.remove('open');
+    btn?.classList.remove('memo-active');
+    if (activeListCardId === id) scheduleListCardHide(id);
+  } else {
+    memoEl.classList.add('open');
+    btn?.classList.add('memo-active');
+    clearTimeout(listCardHideTimer); // 메모 열려있는 동안 타이머 정지
+  }
+}
+
+function toggleListEdit(id) {
+  const card = getListCard(id);
+  if (!card) return;
+  const editEl = card.querySelector('.log-edit');
+  if (!editEl) return;
+  const isOpen = editEl.classList.contains('open');
+
+  if (isOpen) {
+    editEl.classList.remove('open');
+    if (activeListCardId === id) scheduleListCardHide(id);
+  } else {
+    // 메모가 열려있으면 닫는다
+    const memoEl = card.querySelector('.log-memo');
+    if (memoEl?.classList.contains('open')) {
+      memoEl.classList.remove('open');
+      card.querySelector('.icon-btn.memo-active')?.classList.remove('memo-active');
+    }
+    // 기존 값 채우기
+    const log = logs.find((l) => l.id === id);
+    if (log) {
+      editEl.querySelector('.edit-date').value = log.date;
+      editEl.querySelector('.edit-time').value = log.time;
+      editEl.querySelector('.edit-body').value = log.body;
+      editEl.querySelector('.edit-memo').value = log.memo || '';
+    }
+    editEl.classList.add('open');
+    clearTimeout(listCardHideTimer); // 수정창 열려있는 동안 타이머 정지
+  }
+}
+
+async function handleInlineEditSave(id) {
+  const card = getListCard(id);
+  if (!card) return;
+  const editEl = card.querySelector('.log-edit');
+  const date = editEl.querySelector('.edit-date').value;
+  const time = editEl.querySelector('.edit-time').value;
+  const body = editEl.querySelector('.edit-body').value.trim();
+  const memo = editEl.querySelector('.edit-memo').value.trim();
+
+  if (!date || !time || !body) {
+    showStatus('날짜/시간/본문을 입력해주세요', true);
+    return;
+  }
+
+  const saveBtnEl = editEl.querySelector('button[data-action="save-edit"]');
+  saveBtnEl.disabled = true;
+  try {
+    const target = logs.find((l) => l.id === id);
+    target.date = date;
+    target.time = time;
+    target.body = body;
+    target.memo = memo;
+    await persistLogs();
+    showStatus('수정했어요');
+    closeListCardActions();
+    renderList();
+    renderCalendar();
+  } catch (err) {
+    console.error(err);
+    showStatus('저장 중 문제가 발생했어요', true);
+    saveBtnEl.disabled = false;
   }
 }
 
@@ -675,6 +727,9 @@ function renderCalendarLogList(monthPrefix) {
 }
 
 function renderList() {
+  clearTimeout(listCardHideTimer);
+  activeListCardId = null;
+
   const query = searchInput.value.trim().toLowerCase();
 
   const sorted = [...logs].sort((a, b) =>
@@ -693,16 +748,16 @@ function renderList() {
 
   filtered.forEach((l) => {
     const hasMemo = !!(l.memo && l.memo.trim());
-    const memoElId = `memo-${l.id}`;
 
     const item = document.createElement('div');
     item.className = 'log-entry';
+    item.dataset.id = l.id;
     item.innerHTML = `
       <div class="log-entry-head">
         <span class="log-timestamp">${l.date} ${l.time}</span>
         <span class="log-entry-actions">
           ${hasMemo ? `
-            <button class="icon-btn" data-action="memo" data-memo-target="${memoElId}" title="메모 보기">
+            <button class="icon-btn" data-action="memo" data-id="${l.id}" title="메모 보기">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4 4h16v12H8l-4 4V4z"></path>
               </svg>
@@ -727,10 +782,24 @@ function renderList() {
       </div>
       <div class="log-body">${escapeHtml(l.body)}</div>
       ${hasMemo ? `
-        <div class="log-memo" id="${memoElId}">
+        <div class="log-memo">
           <div class="log-memo-inner">${linkifyHtml(l.memo)}</div>
         </div>
       ` : ''}
+      <div class="log-edit">
+        <div class="log-edit-inner">
+          <div class="log-edit-row">
+            <input type="date" class="mono-input edit-date">
+            <input type="time" class="mono-input edit-time">
+          </div>
+          <textarea class="edit-body" rows="3"></textarea>
+          <textarea class="memo-textarea edit-memo" rows="2"></textarea>
+          <div class="log-edit-actions">
+            <button class="btn-ghost small" data-action="cancel-edit" data-id="${l.id}">취소</button>
+            <button class="btn-primary small" data-action="save-edit" data-id="${l.id}">수정 완료</button>
+          </div>
+        </div>
+      </div>
     `;
     logList.appendChild(item);
   });
@@ -738,11 +807,17 @@ function renderList() {
 
 logList.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-action]');
-  if (!btn) return;
-  const action = btn.dataset.action;
-  if (action === 'edit') enterEditMode(btn.dataset.id);
-  if (action === 'delete') deleteLog(btn.dataset.id);
-  if (action === 'memo') toggleMemoAccordion(logList, btn.dataset.memoTarget);
+  if (btn) {
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    if (action === 'edit' || action === 'cancel-edit') toggleListEdit(id);
+    else if (action === 'delete') deleteLog(id);
+    else if (action === 'memo') toggleListMemo(id);
+    else if (action === 'save-edit') handleInlineEditSave(id);
+    return;
+  }
+  const card = e.target.closest('.log-entry');
+  if (card) toggleListCardActions(card.dataset.id);
 });
 
 calendarLogList.addEventListener('click', (e) => {
