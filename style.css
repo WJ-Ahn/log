@@ -417,23 +417,22 @@ textarea {
   -webkit-user-select: none;
 }
 
-/* 년월 이동 패널 (헤더 아래 슬라이드다운) */
-.cal-month-picker {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.25s ease;
-}
-.cal-month-picker.open {
-  max-height: 80px;
-}
-.cal-month-picker-inner {
-  display: flex;
-  gap: 8px;
-  padding: 2px 2px 10px;
-}
-.cal-month-input {
-  flex: 1;
+/* 월 라벨 자리를 그대로 대체하는 인라인 년월 입력창 (롱프레스 시 노출) */
+.calendar-month-input {
+  width: 108px;
   text-align: center;
+  font-family: var(--font-main);
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+}
+.calendar-month-input.invalid {
+  color: var(--danger);
 }
 
 .calendar-grid {
