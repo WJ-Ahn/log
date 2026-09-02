@@ -16,6 +16,7 @@ let logs = [];          // 메모리 상의 로그 배열
 let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
 let calEditingId = null;    // 작성창이 수정 모드일 때 대상 로그의 id (생성 모드면 null)
 let calEntryTimeBeforeEdit = ''; // calEntryTime 포커스 시 비우기 전의 원래 값
+let logsLoaded = false;     // 드라이브에서 로그 데이터를 아직 못 받아왔으면 false
 
 let activeListCardId = null;   // 리스트뷰에서 현재 아이콘이 노출된 카드의 id
 let listCardHideTimer = null;  // 그 카드의 2초 자동 숨김 타이머
@@ -108,6 +109,7 @@ async function onSignedIn() {
   app.classList.remove('hidden');
   viewPrevBtn.classList.remove('hidden');
   viewNextBtn.classList.remove('hidden');
+  renderCalendar(); // 로그 데이터 도착 전에도 날짜 숫자는 바로 보이도록
   await loadLogs();
 }
 
@@ -262,6 +264,7 @@ async function loadLogs(manual = false) {
     if (!res.ok) throw new Error('불러오기 실패');
     const text = await res.text();
     logs = text.trim() ? JSON.parse(text) : [];
+    logsLoaded = true;
     renderList();
     renderCalendar();
     if (manual) showStatus('불러왔어요');
@@ -766,11 +769,18 @@ function renderCalendar() {
 }
 
 function renderCalendarLogList(monthPrefix) {
+  calendarLogList.innerHTML = '';
+
+  if (!logsLoaded) {
+    // 아직 드라이브에서 데이터를 못 받아온 상태 — '기록 없음' 문구를 잘못 보여주지 않도록 비워둔다
+    calendarEmptyState.classList.add('hidden');
+    return;
+  }
+
   const monthLogs = logs
     .filter((l) => l.date.startsWith(monthPrefix))
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
 
-  calendarLogList.innerHTML = '';
   calendarEmptyState.classList.toggle('hidden', monthLogs.length > 0);
 
   monthLogs.forEach((l) => {
