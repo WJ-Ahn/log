@@ -99,9 +99,9 @@ window.addEventListener('load', () => {
   calMonthLabel.addEventListener('pointerleave', handleMonthLabelPointerCancel);
   calMonthLabel.addEventListener('pointercancel', handleMonthLabelPointerCancel);
   calMonthLabelInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleCalMonthInputConfirm();
-    else if (e.key === 'Escape') closeCalMonthInput();
+    if (e.key === 'Escape') closeCalMonthInput();
   });
+  calMonthLabelInput.addEventListener('change', handleCalMonthInputConfirm);
   calMonthLabelInput.addEventListener('blur', closeCalMonthInput);
   calSaveBtn.addEventListener('click', handleCalSave);
   calDeleteBtn.addEventListener('click', handleCalDelete);
