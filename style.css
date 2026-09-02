@@ -185,6 +185,10 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
 }
 
+input.invalid {
+  border-color: var(--danger);
+}
+
 .mono-input {
   background: transparent;
   font-family: var(--font-main);
@@ -491,9 +495,10 @@ textarea {
   color: var(--accent);
 }
 
-.cal-composer-header input[type="time"] {
-  width: auto;
+.cal-time-input {
+  width: 76px;
   flex: 0 0 auto;
+  text-align: center;
 }
 
 .cal-composer-actions {

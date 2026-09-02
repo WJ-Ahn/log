@@ -99,6 +99,7 @@ window.addEventListener('load', () => {
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
   calSaveBtn.addEventListener('click', handleCalSave);
+  calEntryTime.addEventListener('blur', handleCalTimeBlur);
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
   applySavedTheme();
@@ -387,6 +388,57 @@ function formatCalComposerDate(dateStr) {
   return `${y}. ${m}. ${d}.`;
 }
 
+// "1200", "930", "12:00" 등 다양한 형태의 입력을 "HH:MM" 로 변환한다.
+// 자릿수 1~2개는 시(時)로만, 3자리는 시 1자리 + 분 2자리, 4자리는 시 2자리 + 분 2자리로 해석한다.
+// 24시간/60분 범위를 벗어나거나 해석 불가능하면 null 을 반환한다.
+function parseTimeInput(raw) {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const colonMatch = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (colonMatch) {
+    const h = parseInt(colonMatch[1], 10);
+    const m = parseInt(colonMatch[2], 10);
+    if (h > 23 || m > 59) return null;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  const digits = trimmed.replace(/[^0-9]/g, '');
+  if (!digits) return null;
+
+  let h, m;
+  if (digits.length <= 2) {
+    h = parseInt(digits, 10);
+    m = 0;
+  } else if (digits.length === 3) {
+    h = parseInt(digits.slice(0, 1), 10);
+    m = parseInt(digits.slice(1), 10);
+  } else if (digits.length === 4) {
+    h = parseInt(digits.slice(0, 2), 10);
+    m = parseInt(digits.slice(2), 10);
+  } else {
+    return null;
+  }
+
+  if (isNaN(h) || isNaN(m) || h > 23 || m > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// 포커스 아웃 시 입력값을 HH:MM 형태로 변환. 형식이 안 맞으면 invalid 표시만 하고 값은 그대로 둔다
+// (등록 시점에 다시 한번 막힌다).
+function handleCalTimeBlur() {
+  const parsed = parseTimeInput(calEntryTime.value);
+  if (parsed) {
+    calEntryTime.value = parsed;
+    calEntryTime.classList.remove('invalid');
+  } else if (calEntryTime.value.trim()) {
+    calEntryTime.classList.add('invalid');
+  } else {
+    calEntryTime.classList.remove('invalid');
+  }
+}
+
 // 선택된 날짜 셀에만 selected 클래스를 입힌다 (전체 재렌더링 없이 하이라이트만 갱신)
 function updateSelectedHighlight() {
   calendarGrid.querySelectorAll('.calendar-cell.selected').forEach((c) => {
@@ -402,6 +454,7 @@ function openCalComposer(dateStr) {
   selectedCalDate = dateStr;
   calComposerDate.textContent = formatCalComposerDate(dateStr);
   calEntryTime.value = new Date().toTimeString().slice(0, 5);
+  calEntryTime.classList.remove('invalid');
   calEntryBody.value = '';
   calEntryMemo.value = '';
   calComposer.classList.add('open');
@@ -414,6 +467,7 @@ function closeCalComposer() {
   calComposer.classList.remove('open');
   calEntryBody.value = '';
   calEntryMemo.value = '';
+  calEntryTime.classList.remove('invalid');
   updateSelectedHighlight();
 }
 
@@ -424,6 +478,16 @@ async function handleCalSave() {
     showStatus('본문을 입력해주세요', true);
     return;
   }
+
+  const parsedTime = parseTimeInput(calEntryTime.value);
+  if (!parsedTime) {
+    showStatus('시간 형식이 올바르지 않아요', true);
+    calEntryTime.classList.add('invalid');
+    return;
+  }
+  calEntryTime.value = parsedTime;
+  calEntryTime.classList.remove('invalid');
+
   if (!selectedCalDate) return;
 
   calSaveBtn.disabled = true;
@@ -431,7 +495,7 @@ async function handleCalSave() {
     logs.unshift({
       id: crypto.randomUUID(),
       date: selectedCalDate,
-      time: calEntryTime.value,
+      time: parsedTime,
       body,
       memo,
     });
@@ -439,6 +503,7 @@ async function handleCalSave() {
     showStatus('기록했어요');
     closeCalComposer();
     renderCalendar();
+    renderList();
   } catch (err) {
     console.error(err);
     showStatus('저장 중 문제가 발생했어요', true);
