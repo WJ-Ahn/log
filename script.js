@@ -10,11 +10,12 @@ const LOG_FILENAME = 'logs.json';
    상태
    ========================================================== */
 let accessToken = null;
-let tokenExpiresAt = null; // 액세스 토큰 만료 시각 (ms, epoch)
 let tokenClient = null;
 let fileId = null;      // logs.json 의 구글 드라이브 파일 ID
 let logs = [];          // 메모리 상의 로그 배열
 let editingId = null;   // 현재 수정 중인 항목 id (없으면 null)
+let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
+let calEntryTimeBeforeEdit = ''; // calEntryTime 포커스 시 비우기 전의 원래 값
 
 /* ==========================================================
    DOM 참조
@@ -55,6 +56,13 @@ const calendarGrid = el('calendarGrid');
 const calendarLogList = el('calendarLogList');
 const calendarEmptyState = el('calendarEmptyState');
 
+const calComposer = el('calComposer');
+const calComposerDate = el('calComposerDate');
+const calEntryTime = el('calEntryTime');
+const calEntryBody = el('calEntryBody');
+const calEntryMemo = el('calEntryMemo');
+const calSaveBtn = el('calSaveBtn');
+
 let calState = (() => {
   const now = new Date();
   return { year: now.getFullYear(), month: now.getMonth() }; // month: 0~11
@@ -72,12 +80,9 @@ window.addEventListener('load', () => {
     callback: async (resp) => {
       if (resp.error) {
         showStatus('로그인에 실패했어요: ' + resp.error, true);
-        resetGateButton();
         return;
       }
       accessToken = resp.access_token;
-      tokenExpiresAt = Date.now() + (Number(resp.expires_in || 3600) * 1000);
-      localStorage.setItem('log_signed_in', 'true');
       onSignedIn();
     },
   });
@@ -94,19 +99,12 @@ window.addEventListener('load', () => {
   viewNextBtn.addEventListener('click', goNextView);
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
+  calSaveBtn.addEventListener('click', handleCalSave);
+  calEntryTime.addEventListener('focus', handleCalTimeFocus);
+  calEntryTime.addEventListener('blur', handleCalTimeBlur);
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
   applySavedTheme();
-
-  // 이전에 로그인한 적 있으면 조용히 재인증 시도
-  attemptAutoSignIn();
-
-  // 앱을 다시 포그라운드로 가져올 때 토큰 유효성 확인
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !app.classList.contains('hidden')) {
-      ensureValidToken();
-    }
-  });
 });
 
 function requestSignIn() {
@@ -118,7 +116,6 @@ async function onSignedIn() {
   app.classList.remove('hidden');
   viewPrevBtn.classList.remove('hidden');
   viewNextBtn.classList.remove('hidden');
-  resetGateButton();
   await loadLogs();
 }
 
@@ -129,76 +126,6 @@ function setDefaultDateTime() {
   const dd = String(now.getDate()).padStart(2, '0');
   entryDate.value = `${yyyy}-${mm}-${dd}`;
   entryTime.value = now.toTimeString().slice(0, 5);
-}
-
-/* ==========================================================
-   조용한 재인증 (토큰 만료 대응)
-   ========================================================== */
-function isTokenValid() {
-  // 만료 60초 전부터는 곧 끊길 걸로 보고 미리 갱신 대상으로 취급
-  return !!accessToken && !!tokenExpiresAt && Date.now() < tokenExpiresAt - 60000;
-}
-
-function silentSignIn() {
-  return new Promise((resolve, reject) => {
-    if (!tokenClient) {
-      reject(new Error('토큰 클라이언트가 초기화되지 않았어요'));
-      return;
-    }
-    const originalCallback = tokenClient.callback;
-    tokenClient.callback = (resp) => {
-      tokenClient.callback = originalCallback;
-      if (resp.error) {
-        reject(new Error(resp.error));
-        return;
-      }
-      accessToken = resp.access_token;
-      tokenExpiresAt = Date.now() + (Number(resp.expires_in || 3600) * 1000);
-      localStorage.setItem('log_signed_in', 'true');
-      resolve();
-    };
-    tokenClient.requestAccessToken({ prompt: '' });
-  });
-}
-
-async function ensureValidToken() {
-  if (isTokenValid()) return true;
-  try {
-    await silentSignIn();
-    return true;
-  } catch (err) {
-    console.error('조용한 재인증 실패:', err);
-    return false;
-  }
-}
-
-function attemptAutoSignIn() {
-  if (localStorage.getItem('log_signed_in') !== 'true') return;
-  authBtnGate.disabled = true;
-  authBtnGate.textContent = '로그인 확인 중...';
-  silentSignIn()
-    .then(() => {
-      onSignedIn();
-    })
-    .catch(() => {
-      resetGateButton();
-    });
-}
-
-function resetGateButton() {
-  authBtnGate.disabled = false;
-  authBtnGate.textContent = '구글 계정 연결';
-}
-
-function signOutToGate() {
-  accessToken = null;
-  tokenExpiresAt = null;
-  localStorage.removeItem('log_signed_in');
-  app.classList.add('hidden');
-  viewPrevBtn.classList.add('hidden');
-  viewNextBtn.classList.add('hidden');
-  gate.classList.remove('hidden');
-  resetGateButton();
 }
 
 /* ==========================================================
@@ -218,6 +145,7 @@ function getCurrentViewName() {
 }
 
 function switchToView(name) {
+  if (name !== 'calendar') closeCalComposer();
   composeView.classList.add('hidden');
   listView.classList.add('hidden');
   calendarView.classList.add('hidden');
@@ -234,6 +162,7 @@ function goNextView() {
 }
 
 function changeMonth(delta) {
+  closeCalComposer();
   calState.month += delta;
   if (calState.month < 0) {
     calState.month = 11;
@@ -274,7 +203,7 @@ function applySavedTheme() {
 }
 
 /* ==========================================================
-   상태 메시지
+   상태 메시지 (화면 정중앙에 표시)
    ========================================================== */
 let statusTimer = null;
 function showStatus(msg, isError = false) {
@@ -346,12 +275,6 @@ async function ensureLogFile() {
 async function loadLogs(manual = false) {
   try {
     if (manual) showStatus('불러오는 중...');
-    const ok = await ensureValidToken();
-    if (!ok) {
-      showStatus('로그인이 만료됐어요. 다시 연결해주세요', true);
-      signOutToGate();
-      return;
-    }
     await ensureLogFile();
     const res = await fetch(`${DRIVE_FILES}/${fileId}?alt=media`, {
       headers: authHeaders(),
@@ -392,13 +315,6 @@ async function handleSave() {
 
   saveBtn.disabled = true;
   try {
-    const ok = await ensureValidToken();
-    if (!ok) {
-      showStatus('로그인이 만료됐어요. 다시 연결해주세요', true);
-      signOutToGate();
-      return;
-    }
-
     if (editingId) {
       const target = logs.find((l) => l.id === editingId);
       target.date = entryDate.value;
@@ -457,18 +373,155 @@ async function deleteLog(id) {
   logs = logs.filter((l) => l.id !== id);
   if (logs.length === before) return;
   try {
-    const ok = await ensureValidToken();
-    if (!ok) {
-      showStatus('로그인이 만료됐어요. 다시 연결해주세요', true);
-      signOutToGate();
-      return;
-    }
     await persistLogs();
     showStatus('삭제했어요');
     renderList();
   } catch (err) {
     console.error(err);
     showStatus('삭제 중 문제가 발생했어요', true);
+  }
+}
+
+/* ==========================================================
+   캘린더뷰 인라인 작성 (날짜 클릭 → 그리드와 로그 리스트 사이에 슬라이드다운)
+   ========================================================== */
+function formatCalComposerDate(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  return `${y}. ${m}. ${d}.`;
+}
+
+// "1200", "930", "12:00" 등 다양한 형태의 입력을 "HH:MM" 로 변환한다.
+// 자릿수 1~2개는 시(時)로만, 3자리는 시 1자리 + 분 2자리, 4자리는 시 2자리 + 분 2자리로 해석한다.
+// 24시간/60분 범위를 벗어나거나 해석 불가능하면 null 을 반환한다.
+function parseTimeInput(raw) {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const colonMatch = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (colonMatch) {
+    const h = parseInt(colonMatch[1], 10);
+    const m = parseInt(colonMatch[2], 10);
+    if (h > 23 || m > 59) return null;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  const digits = trimmed.replace(/[^0-9]/g, '');
+  if (!digits) return null;
+
+  let h, m;
+  if (digits.length <= 2) {
+    h = parseInt(digits, 10);
+    m = 0;
+  } else if (digits.length === 3) {
+    h = parseInt(digits.slice(0, 1), 10);
+    m = parseInt(digits.slice(1), 10);
+  } else if (digits.length === 4) {
+    h = parseInt(digits.slice(0, 2), 10);
+    m = parseInt(digits.slice(2), 10);
+  } else {
+    return null;
+  }
+
+  if (isNaN(h) || isNaN(m) || h > 23 || m > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// 클릭(포커스) 시 기존 시간을 지워 바로 새 값을 입력할 수 있게 한다.
+function handleCalTimeFocus() {
+  calEntryTimeBeforeEdit = calEntryTime.value;
+  calEntryTime.value = '';
+  calEntryTime.classList.remove('invalid');
+}
+
+// 포커스 아웃 시 입력값을 HH:MM 형태로 변환한다.
+// 아무것도 입력하지 않고 빠져나가면 포커스 전 원래 시간으로 복원하고,
+// 형식이 안 맞는 값을 입력했다면 invalid 표시만 하고 값은 그대로 둔다 (등록 시점에 다시 한번 막힌다).
+function handleCalTimeBlur() {
+  if (!calEntryTime.value.trim()) {
+    calEntryTime.value = calEntryTimeBeforeEdit;
+    calEntryTime.classList.remove('invalid');
+    return;
+  }
+  const parsed = parseTimeInput(calEntryTime.value);
+  if (parsed) {
+    calEntryTime.value = parsed;
+    calEntryTime.classList.remove('invalid');
+  } else {
+    calEntryTime.classList.add('invalid');
+  }
+}
+
+// 선택된 날짜 셀에만 selected 클래스를 입힌다 (전체 재렌더링 없이 하이라이트만 갱신)
+function updateSelectedHighlight() {
+  calendarGrid.querySelectorAll('.calendar-cell.selected').forEach((c) => {
+    c.classList.remove('selected');
+  });
+  if (selectedCalDate) {
+    const cell = calendarGrid.querySelector(`.calendar-cell[data-date="${selectedCalDate}"]`);
+    if (cell) cell.classList.add('selected');
+  }
+}
+
+function openCalComposer(dateStr) {
+  selectedCalDate = dateStr;
+  calComposerDate.textContent = formatCalComposerDate(dateStr);
+  calEntryTime.value = new Date().toTimeString().slice(0, 5);
+  calEntryTime.classList.remove('invalid');
+  calEntryBody.value = '';
+  calEntryMemo.value = '';
+  calComposer.classList.add('open');
+  updateSelectedHighlight();
+}
+
+function closeCalComposer() {
+  if (!selectedCalDate) return;
+  selectedCalDate = null;
+  calComposer.classList.remove('open');
+  calEntryBody.value = '';
+  calEntryMemo.value = '';
+  calEntryTime.classList.remove('invalid');
+  updateSelectedHighlight();
+}
+
+async function handleCalSave() {
+  const body = calEntryBody.value.trim();
+  const memo = calEntryMemo.value.trim();
+  if (!body) {
+    showStatus('본문을 입력해주세요', true);
+    return;
+  }
+
+  const parsedTime = parseTimeInput(calEntryTime.value);
+  if (!parsedTime) {
+    showStatus('시간 형식이 올바르지 않아요', true);
+    calEntryTime.classList.add('invalid');
+    return;
+  }
+  calEntryTime.value = parsedTime;
+  calEntryTime.classList.remove('invalid');
+
+  if (!selectedCalDate) return;
+
+  calSaveBtn.disabled = true;
+  try {
+    logs.unshift({
+      id: crypto.randomUUID(),
+      date: selectedCalDate,
+      time: parsedTime,
+      body,
+      memo,
+    });
+    await persistLogs();
+    showStatus('기록했어요');
+    closeCalComposer();
+    renderCalendar();
+    renderList();
+  } catch (err) {
+    console.error(err);
+    showStatus('저장 중 문제가 발생했어요', true);
+  } finally {
+    calSaveBtn.disabled = false;
   }
 }
 
@@ -568,7 +621,10 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${monthPrefix}-${String(d).padStart(2, '0')}`;
     const cell = document.createElement('div');
-    cell.className = 'calendar-cell' + (dateStr === todayStr ? ' today' : '');
+    cell.className = 'calendar-cell'
+      + (dateStr === todayStr ? ' today' : '')
+      + (dateStr === selectedCalDate ? ' selected' : '');
+    cell.dataset.date = dateStr;
     cell.innerHTML = `
       <span>${d}</span>
       ${datesWithLogs.has(dateStr) ? '<span class="calendar-dot"></span>' : ''}
@@ -694,5 +750,16 @@ calendarLogList.addEventListener('click', (e) => {
   if (!btn) return;
   if (btn.dataset.action === 'memo') {
     toggleMemoAccordion(calendarLogList, btn.dataset.memoTarget);
+  }
+});
+
+calendarGrid.addEventListener('click', (e) => {
+  const cell = e.target.closest('.calendar-cell:not(.empty)');
+  if (!cell || !cell.dataset.date) return;
+  const dateStr = cell.dataset.date;
+  if (dateStr === selectedCalDate) {
+    closeCalComposer();
+  } else {
+    openCalComposer(dateStr);
   }
 });
