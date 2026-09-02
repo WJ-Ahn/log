@@ -15,6 +15,7 @@ let fileId = null;      // logs.json 의 구글 드라이브 파일 ID
 let logs = [];          // 메모리 상의 로그 배열
 let editingId = null;   // 현재 수정 중인 항목 id (없으면 null)
 let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
+let calEntryTimeBeforeEdit = ''; // calEntryTime 포커스 시 비우기 전의 원래 값
 
 /* ==========================================================
    DOM 참조
@@ -99,6 +100,7 @@ window.addEventListener('load', () => {
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
   calSaveBtn.addEventListener('click', handleCalSave);
+  calEntryTime.addEventListener('focus', handleCalTimeFocus);
   calEntryTime.addEventListener('blur', handleCalTimeBlur);
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
@@ -425,17 +427,28 @@ function parseTimeInput(raw) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-// 포커스 아웃 시 입력값을 HH:MM 형태로 변환. 형식이 안 맞으면 invalid 표시만 하고 값은 그대로 둔다
-// (등록 시점에 다시 한번 막힌다).
+// 클릭(포커스) 시 기존 시간을 지워 바로 새 값을 입력할 수 있게 한다.
+function handleCalTimeFocus() {
+  calEntryTimeBeforeEdit = calEntryTime.value;
+  calEntryTime.value = '';
+  calEntryTime.classList.remove('invalid');
+}
+
+// 포커스 아웃 시 입력값을 HH:MM 형태로 변환한다.
+// 아무것도 입력하지 않고 빠져나가면 포커스 전 원래 시간으로 복원하고,
+// 형식이 안 맞는 값을 입력했다면 invalid 표시만 하고 값은 그대로 둔다 (등록 시점에 다시 한번 막힌다).
 function handleCalTimeBlur() {
+  if (!calEntryTime.value.trim()) {
+    calEntryTime.value = calEntryTimeBeforeEdit;
+    calEntryTime.classList.remove('invalid');
+    return;
+  }
   const parsed = parseTimeInput(calEntryTime.value);
   if (parsed) {
     calEntryTime.value = parsed;
     calEntryTime.classList.remove('invalid');
-  } else if (calEntryTime.value.trim()) {
-    calEntryTime.classList.add('invalid');
   } else {
-    calEntryTime.classList.remove('invalid');
+    calEntryTime.classList.add('invalid');
   }
 }
 
