@@ -21,6 +21,9 @@ let logsLoaded = false;     // 드라이브에서 로그 데이터를 아직 못
 let activeListCardId = null;   // 리스트뷰에서 현재 아이콘이 노출된 카드의 id
 let listCardHideTimer = null;  // 그 카드의 2초 자동 숨김 타이머
 
+let monthLabelPressTimer = null; // 월 라벨 롱프레스 판별 타이머
+let monthLabelLongPressed = false; // 이번 누름이 롱프레스로 이미 처리됐는지
+
 /* ==========================================================
    DOM 참조
    ========================================================== */
@@ -47,6 +50,9 @@ const calendarView = el('calendarView');
 const calPrevBtn = el('calPrevBtn');
 const calNextBtn = el('calNextBtn');
 const calMonthLabel = el('calMonthLabel');
+const calMonthPicker = el('calMonthPicker');
+const calMonthInput = el('calMonthInput');
+const calMonthGoBtn = el('calMonthGoBtn');
 const calendarGrid = el('calendarGrid');
 const calendarLogList = el('calendarLogList');
 const calendarEmptyState = el('calendarEmptyState');
@@ -91,6 +97,15 @@ window.addEventListener('load', () => {
   viewNextBtn.addEventListener('click', goNextView);
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
+  calMonthLabel.addEventListener('pointerdown', handleMonthLabelPointerDown);
+  calMonthLabel.addEventListener('pointerup', handleMonthLabelPointerUp);
+  calMonthLabel.addEventListener('pointerleave', handleMonthLabelPointerUp);
+  calMonthLabel.addEventListener('pointercancel', handleMonthLabelPointerUp);
+  calMonthLabel.addEventListener('click', handleMonthLabelClick);
+  calMonthGoBtn.addEventListener('click', handleCalMonthGo);
+  calMonthInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleCalMonthGo();
+  });
   calSaveBtn.addEventListener('click', handleCalSave);
   calDeleteBtn.addEventListener('click', handleCalDelete);
   calEntryTime.addEventListener('focus', handleCalTimeFocus);
@@ -125,6 +140,7 @@ function getCurrentViewName() {
 function switchToView(name) {
   if (name !== 'calendar') closeCalComposer();
   if (name !== 'list') closeListCardActions();
+  closeCalMonthPicker();
   listView.classList.add('hidden');
   calendarView.classList.add('hidden');
   VIEW_EL[name].classList.remove('hidden');
@@ -145,6 +161,7 @@ function goNextView() {
 
 function changeMonth(delta) {
   closeCalComposer();
+  closeCalMonthPicker();
   calState.month += delta;
   if (calState.month < 0) {
     calState.month = 11;
@@ -314,6 +331,80 @@ async function deleteLog(id) {
 }
 
 /* ==========================================================
+   캘린더 월 라벨 — 짧게 누르면 오늘로, 길게 누르면 년월 입력
+   ========================================================== */
+const MONTH_LABEL_LONG_PRESS_MS = 550;
+
+function handleMonthLabelPointerDown() {
+  monthLabelLongPressed = false;
+  clearTimeout(monthLabelPressTimer);
+  monthLabelPressTimer = setTimeout(() => {
+    monthLabelLongPressed = true;
+    openCalMonthPicker();
+  }, MONTH_LABEL_LONG_PRESS_MS);
+}
+
+function handleMonthLabelPointerUp() {
+  clearTimeout(monthLabelPressTimer);
+}
+
+// pointerup 이후에 발생하는 click 에서 짧게 누른 경우만 오늘로 이동시킨다.
+// (롱프레스가 이미 발동했다면 여기서는 아무것도 하지 않는다)
+function handleMonthLabelClick() {
+  if (monthLabelLongPressed) {
+    monthLabelLongPressed = false;
+    return;
+  }
+  jumpToToday();
+}
+
+function jumpToToday() {
+  closeCalComposer();
+  closeCalMonthPicker();
+  const now = new Date();
+  calState = { year: now.getFullYear(), month: now.getMonth() };
+  renderCalendar();
+}
+
+// "2026-09", "2026.09", "202609" 등 다양한 구분자를 허용해 연/월로 해석한다.
+// 숫자 6자리(YYYYMM)로 맞아떨어지지 않거나 월이 1~12 범위를 벗어나면 null 을 반환한다.
+function parseYearMonthInput(raw) {
+  if (!raw) return null;
+  const digits = raw.trim().replace(/[^0-9]/g, '');
+  if (digits.length !== 6) return null;
+  const year = parseInt(digits.slice(0, 4), 10);
+  const month = parseInt(digits.slice(4, 6), 10);
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return null;
+  return { year, month: month - 1 };
+}
+
+function openCalMonthPicker() {
+  calMonthInput.value = `${calState.year}-${String(calState.month + 1).padStart(2, '0')}`;
+  calMonthInput.classList.remove('invalid');
+  calMonthPicker.classList.add('open');
+  calMonthInput.focus();
+  calMonthInput.select();
+}
+
+function closeCalMonthPicker() {
+  calMonthPicker.classList.remove('open');
+  calMonthInput.classList.remove('invalid');
+}
+
+function handleCalMonthGo() {
+  const parsed = parseYearMonthInput(calMonthInput.value);
+  if (!parsed) {
+    calMonthInput.classList.add('invalid');
+    showStatus('년월 형식이 올바르지 않아요', true);
+    return;
+  }
+  closeCalComposer();
+  calState = { year: parsed.year, month: parsed.month };
+  closeCalMonthPicker();
+  renderCalendar();
+}
+
+/* ==========================================================
    캘린더뷰 인라인 작성 / 수정
    — 날짜 셀 클릭: 빈 작성창(등록 모드)
    — 하단 로그리스트 항목 클릭: 값이 채워진 작성창(수정 모드), 삭제 버튼 노출
@@ -398,6 +489,7 @@ function updateSelectedHighlight() {
 
 // 날짜 셀 클릭 → 빈 작성창 (등록 모드)
 function openCalComposer(dateStr) {
+  closeCalMonthPicker();
   calEditingId = null;
   selectedCalDate = dateStr;
   calComposerDate.textContent = formatCalComposerDate(dateStr);
@@ -415,6 +507,8 @@ function openCalComposer(dateStr) {
 function openCalComposerForEdit(logId) {
   const log = logs.find((l) => l.id === logId);
   if (!log) return;
+
+  closeCalMonthPicker();
 
   // 열려있던 메모 아코디언은 닫는다
   calendarLogList.querySelectorAll('.log-memo.open').forEach((m) => m.classList.remove('open'));
