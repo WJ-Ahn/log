@@ -353,19 +353,22 @@ textarea {
   padding: 40px 0;
 }
 
-/* Status bar */
+/* Status bar — screen-center notification */
 .status-bar {
   position: fixed;
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   background: var(--bg-raised);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.82rem;
-  padding: 9px 16px;
-  border-radius: 20px;
-  z-index: 20;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  padding: 12px 20px;
+  border-radius: 12px;
+  max-width: 82%;
+  text-align: center;
+  z-index: 50;
 }
 .status-bar.error {
   border-color: var(--danger);
@@ -419,14 +422,33 @@ textarea {
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--text);
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .calendar-cell.empty {
   visibility: hidden;
 }
 
+.calendar-cell:not(.empty) {
+  cursor: pointer;
+}
+.calendar-cell:not(.empty):active {
+  background: var(--hover-bg);
+}
+
 .calendar-cell.today {
   border: 1px solid var(--accent);
+}
+
+.calendar-cell.selected {
+  background: var(--accent);
+  color: var(--bg);
+}
+.calendar-cell.selected:active {
+  background: var(--accent);
+}
+.calendar-cell.selected .calendar-dot {
+  background: var(--bg);
 }
 
 .calendar-dot {
@@ -434,6 +456,49 @@ textarea {
   height: 4px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+/* Calendar inline composer (slide down between date grid and month's log list) */
+.cal-composer {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease;
+}
+.cal-composer.open {
+  max-height: 420px;
+}
+
+.cal-composer-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 2px 4px;
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+}
+
+.cal-composer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cal-composer-date {
+  font-family: var(--font-main);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+
+.cal-composer-header input[type="time"] {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.cal-composer-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .calendar-log-list {

@@ -14,6 +14,7 @@ let tokenClient = null;
 let fileId = null;      // logs.json 의 구글 드라이브 파일 ID
 let logs = [];          // 메모리 상의 로그 배열
 let editingId = null;   // 현재 수정 중인 항목 id (없으면 null)
+let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
 
 /* ==========================================================
    DOM 참조
@@ -54,6 +55,13 @@ const calendarGrid = el('calendarGrid');
 const calendarLogList = el('calendarLogList');
 const calendarEmptyState = el('calendarEmptyState');
 
+const calComposer = el('calComposer');
+const calComposerDate = el('calComposerDate');
+const calEntryTime = el('calEntryTime');
+const calEntryBody = el('calEntryBody');
+const calEntryMemo = el('calEntryMemo');
+const calSaveBtn = el('calSaveBtn');
+
 let calState = (() => {
   const now = new Date();
   return { year: now.getFullYear(), month: now.getMonth() }; // month: 0~11
@@ -90,6 +98,7 @@ window.addEventListener('load', () => {
   viewNextBtn.addEventListener('click', goNextView);
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
+  calSaveBtn.addEventListener('click', handleCalSave);
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
   applySavedTheme();
@@ -133,6 +142,7 @@ function getCurrentViewName() {
 }
 
 function switchToView(name) {
+  if (name !== 'calendar') closeCalComposer();
   composeView.classList.add('hidden');
   listView.classList.add('hidden');
   calendarView.classList.add('hidden');
@@ -149,6 +159,7 @@ function goNextView() {
 }
 
 function changeMonth(delta) {
+  closeCalComposer();
   calState.month += delta;
   if (calState.month < 0) {
     calState.month = 11;
@@ -189,7 +200,7 @@ function applySavedTheme() {
 }
 
 /* ==========================================================
-   상태 메시지
+   상태 메시지 (화면 정중앙에 표시)
    ========================================================== */
 let statusTimer = null;
 function showStatus(msg, isError = false) {
@@ -369,6 +380,74 @@ async function deleteLog(id) {
 }
 
 /* ==========================================================
+   캘린더뷰 인라인 작성 (날짜 클릭 → 그리드와 로그 리스트 사이에 슬라이드다운)
+   ========================================================== */
+function formatCalComposerDate(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  return `${y}. ${m}. ${d}.`;
+}
+
+// 선택된 날짜 셀에만 selected 클래스를 입힌다 (전체 재렌더링 없이 하이라이트만 갱신)
+function updateSelectedHighlight() {
+  calendarGrid.querySelectorAll('.calendar-cell.selected').forEach((c) => {
+    c.classList.remove('selected');
+  });
+  if (selectedCalDate) {
+    const cell = calendarGrid.querySelector(`.calendar-cell[data-date="${selectedCalDate}"]`);
+    if (cell) cell.classList.add('selected');
+  }
+}
+
+function openCalComposer(dateStr) {
+  selectedCalDate = dateStr;
+  calComposerDate.textContent = formatCalComposerDate(dateStr);
+  calEntryTime.value = new Date().toTimeString().slice(0, 5);
+  calEntryBody.value = '';
+  calEntryMemo.value = '';
+  calComposer.classList.add('open');
+  updateSelectedHighlight();
+}
+
+function closeCalComposer() {
+  if (!selectedCalDate) return;
+  selectedCalDate = null;
+  calComposer.classList.remove('open');
+  calEntryBody.value = '';
+  calEntryMemo.value = '';
+  updateSelectedHighlight();
+}
+
+async function handleCalSave() {
+  const body = calEntryBody.value.trim();
+  const memo = calEntryMemo.value.trim();
+  if (!body) {
+    showStatus('본문을 입력해주세요', true);
+    return;
+  }
+  if (!selectedCalDate) return;
+
+  calSaveBtn.disabled = true;
+  try {
+    logs.unshift({
+      id: crypto.randomUUID(),
+      date: selectedCalDate,
+      time: calEntryTime.value,
+      body,
+      memo,
+    });
+    await persistLogs();
+    showStatus('기록했어요');
+    closeCalComposer();
+    renderCalendar();
+  } catch (err) {
+    console.error(err);
+    showStatus('저장 중 문제가 발생했어요', true);
+  } finally {
+    calSaveBtn.disabled = false;
+  }
+}
+
+/* ==========================================================
    텍스트 처리 (이스케이프 + 링크 인식)
    ========================================================== */
 function escapeHtml(str) {
@@ -464,7 +543,10 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${monthPrefix}-${String(d).padStart(2, '0')}`;
     const cell = document.createElement('div');
-    cell.className = 'calendar-cell' + (dateStr === todayStr ? ' today' : '');
+    cell.className = 'calendar-cell'
+      + (dateStr === todayStr ? ' today' : '')
+      + (dateStr === selectedCalDate ? ' selected' : '');
+    cell.dataset.date = dateStr;
     cell.innerHTML = `
       <span>${d}</span>
       ${datesWithLogs.has(dateStr) ? '<span class="calendar-dot"></span>' : ''}
@@ -590,5 +672,16 @@ calendarLogList.addEventListener('click', (e) => {
   if (!btn) return;
   if (btn.dataset.action === 'memo') {
     toggleMemoAccordion(calendarLogList, btn.dataset.memoTarget);
+  }
+});
+
+calendarGrid.addEventListener('click', (e) => {
+  const cell = e.target.closest('.calendar-cell:not(.empty)');
+  if (!cell || !cell.dataset.date) return;
+  const dateStr = cell.dataset.date;
+  if (dateStr === selectedCalDate) {
+    closeCalComposer();
+  } else {
+    openCalComposer(dateStr);
   }
 });
