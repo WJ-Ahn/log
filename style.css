@@ -56,7 +56,7 @@ body {
   cursor: pointer;
   padding: 11px 16px;
   min-height: 44px;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
+  transition: background-color 0.15s ease, opacity 0.15s ease, color 0.15s ease;
 }
 .btn-primary:active { background: #e4e4e7; }
 .btn-ghost:active { background: var(--hover-bg); }
@@ -81,6 +81,19 @@ body {
   padding: 7px 10px;
   min-height: 38px;
   font-size: 0.78rem;
+}
+
+.btn-ghost.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.btn-ghost.danger:active {
+  background: var(--danger);
+  color: #ffffff;
+}
+.btn-ghost:disabled, .btn-ghost.danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Gate (login screen) */
@@ -510,6 +523,7 @@ textarea {
 .cal-composer-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .calendar-log-list {
@@ -524,6 +538,14 @@ textarea {
   gap: 10px;
   font-size: 0.9rem;
   line-height: 1.55;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  transition: background-color 0.15s ease;
+}
+.calendar-log-item:active {
+  background: var(--hover-bg);
 }
 
 .calendar-log-day {

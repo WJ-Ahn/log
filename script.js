@@ -14,6 +14,7 @@ let tokenClient = null;
 let fileId = null;      // logs.json 의 구글 드라이브 파일 ID
 let logs = [];          // 메모리 상의 로그 배열
 let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
+let calEditingId = null;    // 작성창이 수정 모드일 때 대상 로그의 id (생성 모드면 null)
 let calEntryTimeBeforeEdit = ''; // calEntryTime 포커스 시 비우기 전의 원래 값
 
 let activeListCardId = null;   // 리스트뷰에서 현재 아이콘이 노출된 카드의 id
@@ -55,6 +56,7 @@ const calEntryTime = el('calEntryTime');
 const calEntryBody = el('calEntryBody');
 const calEntryMemo = el('calEntryMemo');
 const calSaveBtn = el('calSaveBtn');
+const calDeleteBtn = el('calDeleteBtn');
 
 let calState = (() => {
   const now = new Date();
@@ -89,6 +91,7 @@ window.addEventListener('load', () => {
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
   calSaveBtn.addEventListener('click', handleCalSave);
+  calDeleteBtn.addEventListener('click', handleCalDelete);
   calEntryTime.addEventListener('focus', handleCalTimeFocus);
   calEntryTime.addEventListener('blur', handleCalTimeBlur);
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
@@ -281,15 +284,23 @@ async function persistLogs() {
 }
 
 /* ==========================================================
-   삭제 (리스트뷰 공용)
+   삭제 공용 로직 (리스트뷰 / 캘린더뷰 공용)
    ========================================================== */
-async function deleteLog(id) {
-  if (!confirm('이 기록을 삭제할까요?')) return;
+// 확인창 없이 실제 삭제 + 저장만 수행. 성공적으로 지워졌으면 true 반환.
+async function removeLogById(id) {
   const before = logs.length;
   logs = logs.filter((l) => l.id !== id);
-  if (logs.length === before) return;
+  if (logs.length === before) return false;
+  await persistLogs();
+  return true;
+}
+
+// 리스트뷰 카드의 삭제 아이콘에서 호출
+async function deleteLog(id) {
+  if (!confirm('이 기록을 삭제할까요?')) return;
   try {
-    await persistLogs();
+    const removed = await removeLogById(id);
+    if (!removed) return;
     showStatus('삭제했어요');
     renderList();
     renderCalendar();
@@ -300,7 +311,9 @@ async function deleteLog(id) {
 }
 
 /* ==========================================================
-   캘린더뷰 인라인 작성 (날짜 클릭 → 그리드와 로그 리스트 사이에 슬라이드다운)
+   캘린더뷰 인라인 작성 / 수정
+   — 날짜 셀 클릭: 빈 작성창(등록 모드)
+   — 하단 로그리스트 항목 클릭: 값이 채워진 작성창(수정 모드), 삭제 버튼 노출
    ========================================================== */
 function formatCalComposerDate(dateStr) {
   const [y, m, d] = dateStr.split('-');
@@ -380,13 +393,39 @@ function updateSelectedHighlight() {
   }
 }
 
+// 날짜 셀 클릭 → 빈 작성창 (등록 모드)
 function openCalComposer(dateStr) {
+  calEditingId = null;
   selectedCalDate = dateStr;
   calComposerDate.textContent = formatCalComposerDate(dateStr);
   calEntryTime.value = new Date().toTimeString().slice(0, 5);
   calEntryTime.classList.remove('invalid');
   calEntryBody.value = '';
   calEntryMemo.value = '';
+  calSaveBtn.textContent = '등록';
+  calDeleteBtn.classList.add('hidden');
+  calComposer.classList.add('open');
+  updateSelectedHighlight();
+}
+
+// 하단 로그리스트 항목 클릭 → 값이 채워진 작성창 (수정 모드)
+function openCalComposerForEdit(logId) {
+  const log = logs.find((l) => l.id === logId);
+  if (!log) return;
+
+  // 열려있던 메모 아코디언은 닫는다
+  calendarLogList.querySelectorAll('.log-memo.open').forEach((m) => m.classList.remove('open'));
+  calendarLogList.querySelectorAll('.icon-btn.memo-active').forEach((btn) => btn.classList.remove('memo-active'));
+
+  calEditingId = logId;
+  selectedCalDate = log.date;
+  calComposerDate.textContent = formatCalComposerDate(log.date);
+  calEntryTime.value = log.time;
+  calEntryTime.classList.remove('invalid');
+  calEntryBody.value = log.body;
+  calEntryMemo.value = log.memo || '';
+  calSaveBtn.textContent = '수정 완료';
+  calDeleteBtn.classList.remove('hidden');
   calComposer.classList.add('open');
   updateSelectedHighlight();
 }
@@ -394,10 +433,13 @@ function openCalComposer(dateStr) {
 function closeCalComposer() {
   if (!selectedCalDate) return;
   selectedCalDate = null;
+  calEditingId = null;
   calComposer.classList.remove('open');
   calEntryBody.value = '';
   calEntryMemo.value = '';
   calEntryTime.classList.remove('invalid');
+  calSaveBtn.textContent = '등록';
+  calDeleteBtn.classList.add('hidden');
   updateSelectedHighlight();
 }
 
@@ -420,17 +462,28 @@ async function handleCalSave() {
 
   if (!selectedCalDate) return;
 
+  const editingId = calEditingId;
   calSaveBtn.disabled = true;
+  calDeleteBtn.disabled = true;
   try {
-    logs.unshift({
-      id: crypto.randomUUID(),
-      date: selectedCalDate,
-      time: parsedTime,
-      body,
-      memo,
-    });
+    if (editingId) {
+      const target = logs.find((l) => l.id === editingId);
+      if (!target) throw new Error('대상을 찾을 수 없어요');
+      target.date = selectedCalDate;
+      target.time = parsedTime;
+      target.body = body;
+      target.memo = memo;
+    } else {
+      logs.unshift({
+        id: crypto.randomUUID(),
+        date: selectedCalDate,
+        time: parsedTime,
+        body,
+        memo,
+      });
+    }
     await persistLogs();
-    showStatus('기록했어요');
+    showStatus(editingId ? '수정했어요' : '기록했어요');
     closeCalComposer();
     renderCalendar();
     renderList();
@@ -439,6 +492,31 @@ async function handleCalSave() {
     showStatus('저장 중 문제가 발생했어요', true);
   } finally {
     calSaveBtn.disabled = false;
+    calDeleteBtn.disabled = false;
+  }
+}
+
+// 작성창이 수정 모드일 때 삭제 버튼에서 호출
+async function handleCalDelete() {
+  if (!calEditingId) return;
+  if (!confirm('이 기록을 삭제할까요?')) return;
+
+  const id = calEditingId;
+  calSaveBtn.disabled = true;
+  calDeleteBtn.disabled = true;
+  try {
+    const removed = await removeLogById(id);
+    if (!removed) return;
+    showStatus('삭제했어요');
+    closeCalComposer();
+    renderList();
+    renderCalendar();
+  } catch (err) {
+    console.error(err);
+    showStatus('삭제 중 문제가 발생했어요', true);
+  } finally {
+    calSaveBtn.disabled = false;
+    calDeleteBtn.disabled = false;
   }
 }
 
@@ -702,6 +780,7 @@ function renderCalendarLogList(monthPrefix) {
 
     const item = document.createElement('div');
     item.className = 'calendar-log-item';
+    item.dataset.id = l.id;
     item.innerHTML = `
       <span class="calendar-log-day">${day}.</span>
       <div class="calendar-log-content">
@@ -822,9 +901,18 @@ logList.addEventListener('click', (e) => {
 
 calendarLogList.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-action]');
-  if (!btn) return;
-  if (btn.dataset.action === 'memo') {
-    toggleMemoAccordion(calendarLogList, btn.dataset.memoTarget);
+  if (btn) {
+    if (btn.dataset.action === 'memo') {
+      toggleMemoAccordion(calendarLogList, btn.dataset.memoTarget);
+    }
+    return;
+  }
+  const item = e.target.closest('.calendar-log-item');
+  if (!item || !item.dataset.id) return;
+  if (calEditingId === item.dataset.id) {
+    closeCalComposer();
+  } else {
+    openCalComposerForEdit(item.dataset.id);
   }
 });
 
