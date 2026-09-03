@@ -215,7 +215,12 @@ textarea {
   gap: 8px;
 }
 .toolbar #searchInput { flex: 1; }
+.toolbar #viewToggleBtn { flex-shrink: 0; }
 .toolbar #menuToggleBtn { flex-shrink: 0; }
+
+/* 체크리스트 상단 툴바 (검색창 툴바와 동일 레이아웃) */
+.checklist-toolbar #checklistInput { flex: 1; }
+.checklist-toolbar #checklistMenuToggleBtn { flex-shrink: 0; }
 
 /* Settings menu (slide down between toolbar and list) */
 .settings-menu {
@@ -245,6 +250,12 @@ textarea {
 .settings-menu-item:last-child { border-bottom: none; }
 .settings-menu-item:active { background: var(--hover-bg); }
 .settings-menu-item svg { flex-shrink: 0; color: var(--text-dim); }
+
+/* 체크리스트 필터 항목 — 현재 선택된 필터 강조 */
+.checklist-filter-item.active {
+  color: var(--accent);
+  font-weight: 700;
+}
 
 /* Log list */
 .log-list {
@@ -602,4 +613,98 @@ textarea {
   color: var(--text);
   white-space: pre-wrap;
   flex: 1;
+}
+
+/* ==========================================================
+   체크리스트 (Checklist)
+   ========================================================== */
+.checklist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 64px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.checklist-checkbox {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.checklist-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.checklist-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.checklist-text {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+}
+
+.checklist-item.done .checklist-text {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+
+.checklist-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.checklist-item.actions-visible .checklist-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 체크리스트 인라인 수정 슬라이드다운 */
+.checklist-edit {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.checklist-edit.open {
+  max-height: 200px;
+}
+.checklist-edit-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.checklist-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

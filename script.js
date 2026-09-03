@@ -13,6 +13,7 @@ let accessToken = null;
 let tokenClient = null;
 let fileId = null;      // logs.json 의 구글 드라이브 파일 ID
 let logs = [];          // 메모리 상의 로그 배열
+let checklist = [];     // 메모리 상의 체크리스트 배열
 let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
 let calEditingId = null;    // 작성창이 수정 모드일 때 대상 로그의 id (생성 모드면 null)
 let calEntryTimeBeforeEdit = ''; // calEntryTime 포커스 시 비우기 전의 원래 값
@@ -22,6 +23,11 @@ let activeListCardId = null;   // 리스트뷰에서 현재 아이콘이 노출�
 let listCardHideTimer = null;  // 그 카드의 2초 자동 숨김 타이머
 
 let monthLabelPressStart = 0; // 월 라벨을 누르기 시작한 시각 (0이면 눌려있지 않음)
+
+let activeSubView = 'log';        // listView 내부 서브 화면: 'log' | 'checklist'
+let checklistFilter = 'pending';  // 체크리스트 필터: 'all' | 'pending' | 'done'
+let activeChecklistCardId = null; // 체크리스트에서 현재 아이콘이 노출된 항목의 id
+let checklistCardHideTimer = null; // 그 항목의 2초 자동 숨김 타이머
 
 /* ==========================================================
    DOM 참조
@@ -34,6 +40,7 @@ const authBtnGate = el('authBtnGate');
 const statusBar = el('statusBar');
 
 const searchInput = el('searchInput');
+const viewToggleBtn = el('viewToggleBtn');
 const refreshBtn = el('refreshBtn');
 const menuToggleBtn = el('menuToggleBtn');
 const settingsMenu = el('settingsMenu');
@@ -42,8 +49,16 @@ const themeToggleBtn = el('themeToggleBtn');
 const listView = el('listView');
 const viewPrevBtn = el('viewPrevBtn');
 const viewNextBtn = el('viewNextBtn');
+const logSection = el('logSection');
 const logList = el('logList');
 const emptyState = el('emptyState');
+
+const checklistSection = el('checklistSection');
+const checklistInput = el('checklistInput');
+const checklistMenuToggleBtn = el('checklistMenuToggleBtn');
+const checklistSettingsMenu = el('checklistSettingsMenu');
+const checklistList = el('checklistList');
+const checklistEmptyState = el('checklistEmptyState');
 
 const calendarView = el('calendarView');
 const calPrevBtn = el('calPrevBtn');
@@ -89,9 +104,13 @@ window.addEventListener('load', () => {
     loadLogs(true);
     closeSettingsMenu();
   });
-  searchInput.addEventListener('input', renderList);
+  searchInput.addEventListener('input', () => {
+    if (activeSubView === 'checklist') renderChecklist();
+    else renderList();
+  });
   viewPrevBtn.addEventListener('click', goPrevView);
   viewNextBtn.addEventListener('click', goNextView);
+  viewToggleBtn.addEventListener('click', toggleSubView);
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
   calMonthLabel.addEventListener('pointerdown', handleMonthLabelPointerDown);
@@ -109,7 +128,15 @@ window.addEventListener('load', () => {
   calEntryTime.addEventListener('blur', handleCalTimeBlur);
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
+  checklistMenuToggleBtn.addEventListener('click', toggleChecklistSettingsMenu);
+  checklistInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleChecklistAdd();
+    }
+  });
   applySavedTheme();
+  updateChecklistFilterActiveUI();
 });
 
 function requestSignIn() {
@@ -136,7 +163,12 @@ function getCurrentViewName() {
 
 function switchToView(name) {
   if (name !== 'calendar') closeCalComposer();
-  if (name !== 'list') closeListCardActions();
+  if (name !== 'list') {
+    closeListCardActions();
+    closeSettingsMenu();
+    closeChecklistCardActions();
+    closeChecklistSettingsMenu();
+  }
   closeCalMonthInput();
   listView.classList.add('hidden');
   calendarView.classList.add('hidden');
@@ -168,6 +200,31 @@ function changeMonth(delta) {
     calState.year += 1;
   }
   renderCalendar();
+}
+
+/* ==========================================================
+   리스트뷰 내부 서브 화면 전환 (로그 구역 ↔ 체크리스트 구역)
+   — 상단 검색 툴바(검색창/설정 버튼)는 항상 유지되고 아래 영역만 교체된다
+   ========================================================== */
+function switchSubView(name) {
+  activeSubView = name;
+  if (name === 'checklist') {
+    closeListCardActions();
+    closeSettingsMenu();
+    logSection.classList.add('hidden');
+    checklistSection.classList.remove('hidden');
+    renderChecklist();
+  } else {
+    closeChecklistCardActions();
+    closeChecklistSettingsMenu();
+    checklistSection.classList.add('hidden');
+    logSection.classList.remove('hidden');
+    renderList();
+  }
+}
+
+function toggleSubView() {
+  switchSubView(activeSubView === 'log' ? 'checklist' : 'log');
 }
 
 /* ==========================================================
@@ -249,7 +306,7 @@ async function ensureLogFile() {
     `${JSON.stringify(metadata)}\r\n` +
     `--${boundary}\r\n` +
     `Content-Type: application/json\r\n\r\n` +
-    `[]\r\n` +
+    `{"logs":[],"checklist":[]}\r\n` +
     `--${boundary}--`;
 
   const createRes = await fetch(
@@ -277,11 +334,38 @@ async function loadLogs(manual = false) {
     });
     if (!res.ok) throw new Error('불러오기 실패');
     const text = await res.text();
-    logs = text.trim() ? JSON.parse(text) : [];
+
+    let parsed;
+    if (text.trim()) {
+      parsed = JSON.parse(text);
+    } else {
+      parsed = { logs: [], checklist: [] };
+    }
+
+    // 기존 파일이 로그 배열만 있던 옛 형식이면 { logs, checklist } 형태로 변환한다.
+    let needsMigration = false;
+    if (Array.isArray(parsed)) {
+      logs = parsed;
+      checklist = [];
+      needsMigration = true;
+    } else {
+      logs = parsed.logs || [];
+      checklist = parsed.checklist || [];
+    }
+
     logsLoaded = true;
     renderList();
     renderCalendar();
+    renderChecklist();
     if (manual) showStatus('불러왔어요');
+
+    if (needsMigration) {
+      try {
+        await persistLogs();
+      } catch (err) {
+        console.error('데이터 형식 전환 저장 실패', err);
+      }
+    }
   } catch (err) {
     console.error(err);
     showStatus('불러오기 중 문제가 발생했어요', true);
@@ -295,7 +379,7 @@ async function persistLogs() {
       ...authHeaders(),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(logs, null, 2),
+    body: JSON.stringify({ logs, checklist }, null, 2),
   });
   if (!res.ok) throw new Error('저장 실패');
 }
@@ -831,6 +915,175 @@ async function handleInlineEditSave(id) {
 }
 
 /* ==========================================================
+   체크리스트 — 추가 / 완료토글 / 인라인 수정 / 삭제
+   — 카드 인터랙션(클릭 시 아이콘 노출, 2초 자동 숨김)은 로그 리스트 방식을 그대로 따른다
+   ========================================================== */
+async function handleChecklistAdd() {
+  const text = checklistInput.value.trim();
+  if (!text) return;
+
+  checklistInput.disabled = true;
+  try {
+    checklist.unshift({
+      id: crypto.randomUUID(),
+      text,
+      done: false,
+      createdAt: Date.now(),
+    });
+    await persistLogs();
+    checklistInput.value = '';
+    renderChecklist();
+  } catch (err) {
+    console.error(err);
+    showStatus('추가 중 문제가 발생했어요', true);
+  } finally {
+    checklistInput.disabled = false;
+  }
+}
+
+async function toggleChecklistDone(id, checkboxEl) {
+  const item = checklist.find((c) => c.id === id);
+  if (!item) return;
+  const prev = item.done;
+  item.done = !item.done;
+  checkboxEl.disabled = true;
+  try {
+    await persistLogs();
+    renderChecklist();
+  } catch (err) {
+    console.error(err);
+    item.done = prev;
+    checkboxEl.checked = prev;
+    showStatus('저장 중 문제가 발생했어요', true);
+  } finally {
+    checkboxEl.disabled = false;
+  }
+}
+
+async function deleteChecklistItem(id) {
+  if (!confirm('이 항목을 삭제할까요?')) return;
+  try {
+    const before = checklist.length;
+    checklist = checklist.filter((c) => c.id !== id);
+    if (checklist.length === before) return;
+    await persistLogs();
+    showStatus('삭제했어요');
+    renderChecklist();
+  } catch (err) {
+    console.error(err);
+    showStatus('삭제 중 문제가 발생했어요', true);
+  }
+}
+
+function getChecklistCard(id) {
+  return checklistList.querySelector(`.checklist-item[data-id="${id}"]`);
+}
+
+function scheduleChecklistCardHide(id) {
+  clearTimeout(checklistCardHideTimer);
+  checklistCardHideTimer = setTimeout(() => {
+    const card = getChecklistCard(id);
+    if (!card) return;
+    const editOpen = card.querySelector('.checklist-edit')?.classList.contains('open');
+    if (editOpen) return;
+    closeChecklistCardActions();
+  }, 2000);
+}
+
+function closeChecklistCardActions() {
+  clearTimeout(checklistCardHideTimer);
+  if (!activeChecklistCardId) return;
+  const card = getChecklistCard(activeChecklistCardId);
+  if (card) {
+    card.classList.remove('actions-visible');
+    card.querySelector('.checklist-edit')?.classList.remove('open');
+  }
+  activeChecklistCardId = null;
+}
+
+function openChecklistCardActions(id) {
+  if (activeChecklistCardId && activeChecklistCardId !== id) {
+    closeChecklistCardActions();
+  }
+  activeChecklistCardId = id;
+  const card = getChecklistCard(id);
+  if (card) card.classList.add('actions-visible');
+  scheduleChecklistCardHide(id);
+}
+
+function toggleChecklistCardActions(id) {
+  if (activeChecklistCardId === id) {
+    closeChecklistCardActions();
+  } else {
+    openChecklistCardActions(id);
+  }
+}
+
+function toggleChecklistEdit(id) {
+  const card = getChecklistCard(id);
+  if (!card) return;
+  const editEl = card.querySelector('.checklist-edit');
+  if (!editEl) return;
+  const isOpen = editEl.classList.contains('open');
+
+  if (isOpen) {
+    editEl.classList.remove('open');
+    if (activeChecklistCardId === id) scheduleChecklistCardHide(id);
+  } else {
+    const item = checklist.find((c) => c.id === id);
+    if (item) editEl.querySelector('.checklist-edit-input').value = item.text;
+    editEl.classList.add('open');
+    clearTimeout(checklistCardHideTimer); // 수정창 열려있는 동안 타이머 정지
+  }
+}
+
+async function handleChecklistEditSave(id) {
+  const card = getChecklistCard(id);
+  if (!card) return;
+  const editEl = card.querySelector('.checklist-edit');
+  const text = editEl.querySelector('.checklist-edit-input').value.trim();
+
+  if (!text) {
+    showStatus('내용을 입력해주세요', true);
+    return;
+  }
+
+  const saveBtnEl = editEl.querySelector('button[data-action="save-edit"]');
+  saveBtnEl.disabled = true;
+  try {
+    const target = checklist.find((c) => c.id === id);
+    target.text = text;
+    await persistLogs();
+    showStatus('수정했어요');
+    closeChecklistCardActions();
+    renderChecklist();
+  } catch (err) {
+    console.error(err);
+    showStatus('저장 중 문제가 발생했어요', true);
+    saveBtnEl.disabled = false;
+  }
+}
+
+/* ==========================================================
+   체크리스트 설정 메뉴 (전체보기 / 미완료 보기 / 완료보기)
+   ========================================================== */
+function toggleChecklistSettingsMenu() {
+  const open = checklistSettingsMenu.classList.toggle('open');
+  checklistMenuToggleBtn.setAttribute('aria-expanded', String(open));
+}
+
+function closeChecklistSettingsMenu() {
+  checklistSettingsMenu.classList.remove('open');
+  checklistMenuToggleBtn.setAttribute('aria-expanded', 'false');
+}
+
+function updateChecklistFilterActiveUI() {
+  checklistSettingsMenu.querySelectorAll('.checklist-filter-item').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.filter === checklistFilter);
+  });
+}
+
+/* ==========================================================
    렌더링
    ========================================================== */
 function renderCalendar() {
@@ -1000,6 +1253,68 @@ function renderList() {
   });
 }
 
+// 체크리스트 렌더링 — 상태 필터(전체/미완료/완료)를 먼저 적용한 뒤, 검색어가 있으면 본문 기준으로 한 번 더 좁힌다.
+// 정렬은 등록 시점(createdAt) 기준 최신순.
+function renderChecklist() {
+  clearTimeout(checklistCardHideTimer);
+  activeChecklistCardId = null;
+
+  let base = checklist.slice();
+  if (checklistFilter === 'pending') base = base.filter((c) => !c.done);
+  else if (checklistFilter === 'done') base = base.filter((c) => c.done);
+
+  const query = searchInput.value.trim().toLowerCase();
+  if (query) {
+    base = base.filter((c) => c.text.toLowerCase().includes(query));
+  }
+
+  base.sort((a, b) => b.createdAt - a.createdAt);
+
+  checklistList.innerHTML = '';
+  checklistEmptyState.classList.toggle('hidden', base.length > 0);
+
+  base.forEach((c) => {
+    const item = document.createElement('div');
+    item.className = 'checklist-item' + (c.done ? ' done' : '');
+    item.dataset.id = c.id;
+    item.innerHTML = `
+      <input type="checkbox" class="checklist-checkbox" ${c.done ? 'checked' : ''}>
+      <div class="checklist-content">
+        <div class="checklist-row">
+          <span class="checklist-text">${escapeHtml(c.text)}</span>
+          <span class="checklist-actions">
+            <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+              </svg>
+            </button>
+            <button class="icon-btn danger" data-action="delete" data-id="${c.id}" title="삭제">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path>
+              </svg>
+            </button>
+          </span>
+        </div>
+        <div class="checklist-edit">
+          <div class="checklist-edit-inner">
+            <textarea class="checklist-edit-input" rows="2"></textarea>
+            <div class="checklist-edit-actions">
+              <button class="btn-ghost small" data-action="cancel-edit" data-id="${c.id}">취소</button>
+              <button class="btn-primary small" data-action="save-edit" data-id="${c.id}">수정 완료</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    checklistList.appendChild(item);
+  });
+}
+
 logList.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-action]');
   if (btn) {
@@ -1041,4 +1356,36 @@ calendarGrid.addEventListener('click', (e) => {
   } else {
     openCalComposer(dateStr);
   }
+});
+
+checklistList.addEventListener('change', (e) => {
+  const checkbox = e.target.closest('.checklist-checkbox');
+  if (!checkbox) return;
+  const item = e.target.closest('.checklist-item');
+  if (item) toggleChecklistDone(item.dataset.id, checkbox);
+});
+
+checklistList.addEventListener('click', (e) => {
+  if (e.target.classList.contains('checklist-checkbox')) return; // change 이벤트에서 처리
+
+  const btn = e.target.closest('button[data-action]');
+  if (btn) {
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    if (action === 'edit' || action === 'cancel-edit') toggleChecklistEdit(id);
+    else if (action === 'delete') deleteChecklistItem(id);
+    else if (action === 'save-edit') handleChecklistEditSave(id);
+    return;
+  }
+  const item = e.target.closest('.checklist-item');
+  if (item) toggleChecklistCardActions(item.dataset.id);
+});
+
+checklistSettingsMenu.addEventListener('click', (e) => {
+  const btn = e.target.closest('.checklist-filter-item');
+  if (!btn) return;
+  checklistFilter = btn.dataset.filter;
+  updateChecklistFilterActiveUI();
+  closeChecklistSettingsMenu();
+  renderChecklist();
 });
