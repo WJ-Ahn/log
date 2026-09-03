@@ -39,6 +39,11 @@ const app = el('app');
 const authBtnGate = el('authBtnGate');
 const statusBar = el('statusBar');
 
+const confirmModal = el('confirmModal');
+const confirmModalMessage = el('confirmModalMessage');
+const confirmModalCancelBtn = el('confirmModalCancelBtn');
+const confirmModalOkBtn = el('confirmModalOkBtn');
+
 const searchInput = el('searchInput');
 const viewToggleBtn = el('viewToggleBtn');
 const refreshBtn = el('refreshBtn');
@@ -137,6 +142,16 @@ window.addEventListener('load', () => {
   });
   applySavedTheme();
   updateChecklistFilterActiveUI();
+  confirmModalCancelBtn.addEventListener('click', () => resolveConfirm(false));
+  confirmModalOkBtn.addEventListener('click', () => resolveConfirm(true));
+  confirmModal.addEventListener('click', (e) => {
+    if (e.target === confirmModal) resolveConfirm(false); // 배경 클릭 시 취소
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !confirmModal.classList.contains('hidden')) {
+      resolveConfirm(false);
+    }
+  });
 });
 
 function requestSignIn() {
@@ -265,6 +280,27 @@ function showStatus(msg, isError = false) {
   statusBar.classList.toggle('error', isError);
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => statusBar.classList.add('hidden'), 2600);
+}
+
+/* ==========================================================
+   삭제 확인 모달 — 브라우저 기본 confirm() 대신 앱 디자인에 맞춘 커스텀 모달
+   ========================================================== */
+let confirmResolver = null;
+
+function askConfirm(message) {
+  confirmModalMessage.textContent = message;
+  confirmModal.classList.remove('hidden');
+  return new Promise((resolve) => {
+    confirmResolver = resolve;
+  });
+}
+
+function resolveConfirm(result) {
+  confirmModal.classList.add('hidden');
+  if (confirmResolver) {
+    confirmResolver(result);
+    confirmResolver = null;
+  }
 }
 
 /* ==========================================================
@@ -398,7 +434,7 @@ async function removeLogById(id) {
 
 // 리스트뷰 카드의 삭제 아이콘에서 호출
 async function deleteLog(id) {
-  if (!confirm('이 기록을 삭제할까요?')) return;
+  if (!(await askConfirm('이 기록을 삭제할까요?'))) return;
   try {
     const removed = await removeLogById(id);
     if (!removed) return;
@@ -690,7 +726,7 @@ async function handleCalSave() {
 // 작성창이 수정 모드일 때 삭제 버튼에서 호출
 async function handleCalDelete() {
   if (!calEditingId) return;
-  if (!confirm('이 기록을 삭제할까요?')) return;
+  if (!(await askConfirm('이 기록을 삭제할까요?'))) return;
 
   const id = calEditingId;
   calSaveBtn.disabled = true;
@@ -961,7 +997,7 @@ async function toggleChecklistDone(id, checkboxEl) {
 }
 
 async function deleteChecklistItem(id) {
-  if (!confirm('이 항목을 삭제할까요?')) return;
+  if (!(await askConfirm('이 항목을 삭제할까요?'))) return;
   try {
     const before = checklist.length;
     checklist = checklist.filter((c) => c.id !== id);
@@ -984,8 +1020,8 @@ function scheduleChecklistCardHide(id) {
   checklistCardHideTimer = setTimeout(() => {
     const card = getChecklistCard(id);
     if (!card) return;
-    const editOpen = card.querySelector('.checklist-edit')?.classList.contains('open');
-    if (editOpen) return;
+    const editingOpen = !card.querySelector('.checklist-edit-input')?.classList.contains('hidden');
+    if (editingOpen) return;
     closeChecklistCardActions();
   }, 2000);
 }
@@ -996,7 +1032,11 @@ function closeChecklistCardActions() {
   const card = getChecklistCard(activeChecklistCardId);
   if (card) {
     card.classList.remove('actions-visible');
-    card.querySelector('.checklist-edit')?.classList.remove('open');
+    const inputEl = card.querySelector('.checklist-edit-input');
+    if (inputEl && !inputEl.classList.contains('hidden')) {
+      inputEl.dataset.cancelled = 'true';
+      cancelChecklistEdit(activeChecklistCardId);
+    }
   }
   activeChecklistCardId = null;
 }
@@ -1019,48 +1059,84 @@ function toggleChecklistCardActions(id) {
   }
 }
 
+// 수정 아이콘 클릭 — 편집 중이 아니면 시작, 편집 중이면(다시 누르면) 취소
 function toggleChecklistEdit(id) {
   const card = getChecklistCard(id);
   if (!card) return;
-  const editEl = card.querySelector('.checklist-edit');
-  if (!editEl) return;
-  const isOpen = editEl.classList.contains('open');
+  const inputEl = card.querySelector('.checklist-edit-input');
+  if (!inputEl) return;
+  const isEditing = !inputEl.classList.contains('hidden');
 
-  if (isOpen) {
-    editEl.classList.remove('open');
-    if (activeChecklistCardId === id) scheduleChecklistCardHide(id);
+  if (isEditing) {
+    inputEl.dataset.cancelled = 'true';
+    cancelChecklistEdit(id);
   } else {
-    const item = checklist.find((c) => c.id === id);
-    if (item) editEl.querySelector('.checklist-edit-input').value = item.text;
-    editEl.classList.add('open');
-    clearTimeout(checklistCardHideTimer); // 수정창 열려있는 동안 타이머 정지
+    startChecklistEdit(id);
   }
 }
 
-async function handleChecklistEditSave(id) {
+// 텍스트(span) 자리를 input으로 바꿔 그 자리에서 바로 수정할 수 있게 한다.
+function startChecklistEdit(id) {
   const card = getChecklistCard(id);
   if (!card) return;
-  const editEl = card.querySelector('.checklist-edit');
-  const text = editEl.querySelector('.checklist-edit-input').value.trim();
+  const item = checklist.find((c) => c.id === id);
+  if (!item) return;
+  const textEl = card.querySelector('.checklist-text');
+  const inputEl = card.querySelector('.checklist-edit-input');
 
+  inputEl.value = item.text;
+  textEl.classList.add('hidden');
+  inputEl.classList.remove('hidden');
+  inputEl.focus();
+  inputEl.select();
+  clearTimeout(checklistCardHideTimer); // 편집 중엔 자동 숨김 타이머 정지
+}
+
+// 저장 없이 편집을 닫고 원래 텍스트를 다시 보여준다.
+function cancelChecklistEdit(id) {
+  const card = getChecklistCard(id);
+  if (!card) return;
+  const textEl = card.querySelector('.checklist-text');
+  const inputEl = card.querySelector('.checklist-edit-input');
+  if (!textEl || !inputEl) return;
+  inputEl.classList.add('hidden');
+  textEl.classList.remove('hidden');
+  if (activeChecklistCardId === id) scheduleChecklistCardHide(id);
+}
+
+// Enter 또는 포커스 아웃 시 호출 — 값이 비었거나 변경이 없으면 저장하지 않는다.
+async function commitChecklistEdit(id) {
+  const card = getChecklistCard(id);
+  if (!card) return;
+  const inputEl = card.querySelector('.checklist-edit-input');
+  if (!inputEl || inputEl.classList.contains('hidden')) return;
+  if (inputEl.dataset.committing === 'true') return; // 이미 저장 처리 중 (Enter로 이미 트리거된 경우 등)
+
+  const text = inputEl.value.trim();
   if (!text) {
     showStatus('내용을 입력해주세요', true);
     return;
   }
 
-  const saveBtnEl = editEl.querySelector('button[data-action="save-edit"]');
-  saveBtnEl.disabled = true;
+  const item = checklist.find((c) => c.id === id);
+  if (!item) return;
+  if (item.text === text) {
+    cancelChecklistEdit(id);
+    return;
+  }
+
+  inputEl.dataset.committing = 'true';
+  inputEl.disabled = true;
   try {
-    const target = checklist.find((c) => c.id === id);
-    target.text = text;
+    item.text = text;
     await persistLogs();
     showStatus('수정했어요');
-    closeChecklistCardActions();
     renderChecklist();
   } catch (err) {
     console.error(err);
     showStatus('저장 중 문제가 발생했어요', true);
-    saveBtnEl.disabled = false;
+    inputEl.disabled = false;
+    delete inputEl.dataset.committing;
   }
 }
 
@@ -1282,6 +1358,7 @@ function renderChecklist() {
       <div class="checklist-content">
         <div class="checklist-row">
           <span class="checklist-text">${escapeHtml(c.text)}</span>
+          <input type="text" class="checklist-edit-input hidden" value="${escapeHtml(c.text)}">
           <span class="checklist-actions">
             <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1299,15 +1376,6 @@ function renderChecklist() {
               </svg>
             </button>
           </span>
-        </div>
-        <div class="checklist-edit">
-          <div class="checklist-edit-inner">
-            <textarea class="checklist-edit-input" rows="2"></textarea>
-            <div class="checklist-edit-actions">
-              <button class="btn-ghost small" data-action="cancel-edit" data-id="${c.id}">취소</button>
-              <button class="btn-primary small" data-action="save-edit" data-id="${c.id}">수정 완료</button>
-            </div>
-          </div>
         </div>
       </div>
     `;
@@ -1367,18 +1435,49 @@ checklistList.addEventListener('change', (e) => {
 
 checklistList.addEventListener('click', (e) => {
   if (e.target.classList.contains('checklist-checkbox')) return; // change 이벤트에서 처리
+  if (e.target.closest('.checklist-edit-input')) return; // 편집 중인 입력창 클릭은 카드 액션 토글과 무관하게 둔다
 
   const btn = e.target.closest('button[data-action]');
   if (btn) {
     const action = btn.dataset.action;
     const id = btn.dataset.id;
-    if (action === 'edit' || action === 'cancel-edit') toggleChecklistEdit(id);
+    if (action === 'edit') toggleChecklistEdit(id);
     else if (action === 'delete') deleteChecklistItem(id);
-    else if (action === 'save-edit') handleChecklistEditSave(id);
     return;
   }
   const item = e.target.closest('.checklist-item');
   if (item) toggleChecklistCardActions(item.dataset.id);
+});
+
+// 편집 입력창에서 Enter(저장) / Esc(취소) 처리
+checklistList.addEventListener('keydown', (e) => {
+  const inputEl = e.target.closest('.checklist-edit-input');
+  if (!inputEl) return;
+  const item = e.target.closest('.checklist-item');
+  const id = item?.dataset.id;
+  if (!id) return;
+
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    commitChecklistEdit(id);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    inputEl.dataset.cancelled = 'true';
+    cancelChecklistEdit(id);
+  }
+});
+
+// 편집 입력창 밖을 클릭/포커스 이동 시 자동 저장 (Esc로 취소된 경우는 건너뜀)
+checklistList.addEventListener('focusout', (e) => {
+  const inputEl = e.target.closest('.checklist-edit-input');
+  if (!inputEl) return;
+  if (inputEl.dataset.cancelled === 'true') {
+    delete inputEl.dataset.cancelled;
+    return;
+  }
+  const item = e.target.closest('.checklist-item');
+  const id = item?.dataset.id;
+  if (id) commitChecklistEdit(id);
 });
 
 checklistSettingsMenu.addEventListener('click', (e) => {

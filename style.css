@@ -415,6 +415,44 @@ textarea {
   color: var(--danger);
 }
 
+/* 삭제 확인 모달 — 브라우저 기본 confirm() 대체 */
+.confirm-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 60;
+}
+
+.confirm-modal-box {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 320px;
+  width: 100%;
+  text-align: center;
+}
+
+.confirm-modal-message {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 16px;
+  white-space: pre-wrap;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 8px;
+}
+.confirm-modal-actions .btn-ghost {
+  flex: 1;
+}
+
 /* Calendar view */
 .calendar-header {
   display: flex;
@@ -696,25 +734,11 @@ textarea {
   pointer-events: auto;
 }
 
-/* 체크리스트 인라인 수정 슬라이드다운 */
-.checklist-edit {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.25s ease;
-}
-.checklist-edit.open {
-  max-height: 200px;
-}
-.checklist-edit-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 8px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-}
-.checklist-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+/* 체크리스트 제자리(인라인) 수정 — 텍스트(span) 자리를 그대로 대체하는 입력창 */
+.checklist-edit-input {
+  flex: 1;
+  width: auto;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  padding: 2px 6px;
 }
