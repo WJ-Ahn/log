@@ -905,6 +905,7 @@ function toggleListEdit(id) {
     if (log) {
       editEl.querySelector('.edit-date').value = log.date;
       editEl.querySelector('.edit-time').value = log.time;
+      editEl.querySelector('.edit-time').classList.remove('invalid');
       editEl.querySelector('.edit-body').value = log.body;
       editEl.querySelector('.edit-memo').value = log.memo || '';
     }
@@ -918,21 +919,30 @@ async function handleInlineEditSave(id) {
   if (!card) return;
   const editEl = card.querySelector('.log-edit');
   const date = editEl.querySelector('.edit-date').value;
-  const time = editEl.querySelector('.edit-time').value;
+  const timeInput = editEl.querySelector('.edit-time');
   const body = editEl.querySelector('.edit-body').value.trim();
   const memo = editEl.querySelector('.edit-memo').value.trim();
 
-  if (!date || !time || !body) {
-    showStatus('날짜/시간/본문을 입력해주세요', true);
+  if (!date || !body) {
+    showStatus('날짜/본문을 입력해주세요', true);
     return;
   }
+
+  const parsedTime = parseTimeInput(timeInput.value);
+  if (!parsedTime) {
+    showStatus('시간 형식이 올바르지 않아요', true);
+    timeInput.classList.add('invalid');
+    return;
+  }
+  timeInput.value = parsedTime;
+  timeInput.classList.remove('invalid');
 
   const saveBtnEl = editEl.querySelector('button[data-action="save-edit"]');
   saveBtnEl.disabled = true;
   try {
     const target = logs.find((l) => l.id === id);
     target.date = date;
-    target.time = time;
+    target.time = parsedTime;
     target.body = body;
     target.memo = memo;
     await persistLogs();
@@ -1341,7 +1351,7 @@ function renderList() {
         <div class="log-edit-inner">
           <div class="log-edit-row">
             <input type="date" class="mono-input edit-date">
-            <input type="time" class="mono-input edit-time">
+            <input type="text" class="mono-input edit-time" inputmode="numeric" placeholder="0000" maxlength="5">
           </div>
           <textarea class="edit-body" rows="3"></textarea>
           <textarea class="memo-textarea edit-memo" rows="2"></textarea>
@@ -1428,8 +1438,36 @@ logList.addEventListener('click', (e) => {
     else if (action === 'save-edit') handleInlineEditSave(id);
     return;
   }
+  if (e.target.closest('.log-edit')) return; // 수정창 내부(입력칸 등) 클릭은 카드 토글과 무관하게 둔다
   const card = e.target.closest('.log-entry');
   if (card) toggleListCardActions(card.dataset.id);
+});
+
+// 리스트뷰 인라인 수정의 시간 필드 — 캘린더 작성창(calEntryTime)과 동일한 자유 텍스트 입력 방식
+// 포커스 시 기존 값을 비워 바로 새 값을 입력할 수 있게 하고, 포커스 아웃 시 HH:MM 형태로 정규화한다.
+logList.addEventListener('focusin', (e) => {
+  const timeInput = e.target.closest('.edit-time');
+  if (!timeInput) return;
+  timeInput.dataset.beforeEdit = timeInput.value;
+  timeInput.value = '';
+  timeInput.classList.remove('invalid');
+});
+
+logList.addEventListener('focusout', (e) => {
+  const timeInput = e.target.closest('.edit-time');
+  if (!timeInput) return;
+  if (!timeInput.value.trim()) {
+    timeInput.value = timeInput.dataset.beforeEdit || '';
+    timeInput.classList.remove('invalid');
+    return;
+  }
+  const parsed = parseTimeInput(timeInput.value);
+  if (parsed) {
+    timeInput.value = parsed;
+    timeInput.classList.remove('invalid');
+  } else {
+    timeInput.classList.add('invalid');
+  }
 });
 
 calendarLogList.addEventListener('click', (e) => {
