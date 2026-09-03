@@ -735,10 +735,10 @@ textarea {
 }
 
 /* 체크리스트 제자리(인라인) 수정 — 텍스트(span) 자리를 그대로 대체하는 입력창 */
+/* font-size 는 전역 input 기본값(16px)을 그대로 상속 — 16px 미만이면 iOS Safari에서 포커스 시 자동 확대됨 */
 .checklist-edit-input {
   flex: 1;
   width: auto;
-  font-size: 0.95rem;
   line-height: 1.55;
   padding: 2px 6px;
 }
