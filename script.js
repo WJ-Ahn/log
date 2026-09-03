@@ -5,6 +5,7 @@ const CLIENT_ID = '494695145169-h7me8b67fpee03k1hv6fp47qft9a8tca.apps.googleuser
 const FOLDER_ID = '1HeNJ82jOBew9jeIh54z5bhsosv-MjTC3';
 const SCOPES = 'https://www.googleapis.com/auth/drive';
 const LOG_FILENAME = 'logs.json';
+const TOKEN_STORAGE_KEY = 'log_app_token'; // 토큰 + 만료시각을 localStorage에 저장할 때 쓰는 키
 
 /* ==========================================================
    상태
@@ -28,6 +29,10 @@ let activeSubView = 'checklist';  // listView 내부 서브 화면: 'log' | 'che
 let checklistFilter = 'pending';  // 체크리스트 필터: 'all' | 'pending' | 'done'
 let activeChecklistCardId = null; // 체크리스트에서 현재 아이콘이 노출된 항목의 id
 let checklistCardHideTimer = null; // 그 항목의 2초 자동 숨김 타이머
+
+// 토큰 자동 재발급(silent refresh)이 진행 중일 때 그 결과를 기다리는 resolve/reject 쌍
+// (tokenClient의 callback은 초기화 시 한 번만 등록되므로, 일반 로그인과 조용한 재발급을 이 변수로 구분한다)
+let silentRefreshResolvers = null;
 
 /* ==========================================================
    DOM 참조
@@ -96,11 +101,26 @@ window.addEventListener('load', () => {
     client_id: CLIENT_ID,
     scope: SCOPES,
     callback: async (resp) => {
+      // 조용한 재발급(silent refresh) 요청 중이었다면 이 결과는 그쪽 Promise로 넘긴다
+      if (silentRefreshResolvers) {
+        const { resolve, reject } = silentRefreshResolvers;
+        silentRefreshResolvers = null;
+        if (resp.error) {
+          reject(new Error(resp.error));
+          return;
+        }
+        accessToken = resp.access_token;
+        saveTokenToStorage(accessToken, resp.expires_in);
+        resolve(accessToken);
+        return;
+      }
+
       if (resp.error) {
         showStatus('로그인에 실패했어요: ' + resp.error, true);
         return;
       }
       accessToken = resp.access_token;
+      saveTokenToStorage(accessToken, resp.expires_in);
       onSignedIn();
     },
   });
@@ -149,6 +169,8 @@ window.addEventListener('load', () => {
       resolveConfirm(false);
     }
   });
+
+  attemptAutoSignIn();
 });
 
 function requestSignIn() {
@@ -162,6 +184,75 @@ async function onSignedIn() {
   viewNextBtn.classList.remove('hidden');
   renderCalendar(); // 로그 데이터 도착 전에도 날짜 숫자는 바로 보이도록
   await loadLogs();
+}
+
+/* ==========================================================
+   토큰 저장 / 자동 로그인 / 조용한 재발급 (silent refresh)
+   ========================================================== */
+// 만료 5분 전을 기준으로 삼아, 만료 직전에 요청이 걸리는 상황을 피한다.
+const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+function saveTokenToStorage(token, expiresInSeconds) {
+  const expiresAt = Date.now() + (Number(expiresInSeconds) || 3600) * 1000;
+  try {
+    localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token, expiresAt }));
+  } catch (err) {
+    console.error('토큰 저장 실패', err);
+  }
+}
+
+function loadTokenFromStorage() {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.token || !parsed.expiresAt) return null;
+    return parsed;
+  } catch (err) {
+    return null;
+  }
+}
+
+function clearTokenStorage() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+// 앱 로드 시 저장된 토큰이 아직 유효하면 로그인 화면을 건너뛰고 바로 시작한다.
+function attemptAutoSignIn() {
+  const stored = loadTokenFromStorage();
+  if (stored && stored.expiresAt - TOKEN_EXPIRY_BUFFER_MS > Date.now()) {
+    accessToken = stored.token;
+    onSignedIn();
+  }
+}
+
+// 팝업 없이 토큰을 조용히 재발급 받는다. 이미 이 앱에 동의한 사용자는
+// 화면 깜빡임 없이 새 토큰을 받는 경우가 많고, 완전히 세션이 끊긴 경우엔 실패한다.
+function silentRefresh() {
+  return new Promise((resolve, reject) => {
+    if (!tokenClient) {
+      reject(new Error('토큰 클라이언트가 초기화되지 않았어요'));
+      return;
+    }
+    silentRefreshResolvers = { resolve, reject };
+    try {
+      tokenClient.requestAccessToken({ prompt: '' });
+    } catch (err) {
+      silentRefreshResolvers = null;
+      reject(err);
+    }
+  });
+}
+
+// 로그인 화면으로 되돌아간다 (조용한 재발급도 실패했을 때만 호출)
+function showGateAgain() {
+  clearTokenStorage();
+  accessToken = null;
+  app.classList.add('hidden');
+  viewPrevBtn.classList.add('hidden');
+  viewNextBtn.classList.add('hidden');
+  gate.classList.remove('hidden');
+  showStatus('로그인이 만료됐어요. 다시 연결해주세요.', true);
 }
 
 /* ==========================================================
@@ -310,14 +401,36 @@ function authHeaders() {
   return { Authorization: `Bearer ${accessToken}` };
 }
 
+// fetch를 감싸서, 401(토큰 만료)이 오면 조용한 재발급을 한 번 시도하고 같은 요청을 재시도한다.
+// 재발급까지 실패하면 로그인 화면으로 돌려보낸다.
+async function driveFetch(url, options = {}) {
+  const doFetch = () =>
+    fetch(url, {
+      ...options,
+      headers: { ...(options.headers || {}), ...authHeaders() },
+    });
+
+  let res = await doFetch();
+
+  if (res.status === 401) {
+    try {
+      await silentRefresh();
+      res = await doFetch();
+    } catch (err) {
+      showGateAgain();
+      throw new Error('로그인이 만료됐어요');
+    }
+  }
+
+  return res;
+}
+
 // logs.json 파일을 폴더 안에서 찾고, 없으면 새로 만든다.
 async function ensureLogFile() {
   const q = encodeURIComponent(
     `name='${LOG_FILENAME}' and '${FOLDER_ID}' in parents and trashed=false`
   );
-  const res = await fetch(`${DRIVE_FILES}?q=${q}&fields=files(id,name)`, {
-    headers: authHeaders(),
-  });
+  const res = await driveFetch(`${DRIVE_FILES}?q=${q}&fields=files(id,name)`);
   if (!res.ok) throw new Error('파일 검색 실패');
   const data = await res.json();
 
@@ -342,12 +455,11 @@ async function ensureLogFile() {
     `{"logs":[],"checklist":[]}\r\n` +
     `--${boundary}--`;
 
-  const createRes = await fetch(
+  const createRes = await driveFetch(
     `${DRIVE_UPLOAD}?uploadType=multipart&fields=id`,
     {
       method: 'POST',
       headers: {
-        ...authHeaders(),
         'Content-Type': `multipart/related; boundary=${boundary}`,
       },
       body,
@@ -362,9 +474,7 @@ async function loadLogs(manual = false) {
   try {
     if (manual) showStatus('불러오는 중...');
     await ensureLogFile();
-    const res = await fetch(`${DRIVE_FILES}/${fileId}?alt=media`, {
-      headers: authHeaders(),
-    });
+    const res = await driveFetch(`${DRIVE_FILES}/${fileId}?alt=media`);
     if (!res.ok) throw new Error('불러오기 실패');
     const text = await res.text();
 
@@ -406,10 +516,9 @@ async function loadLogs(manual = false) {
 }
 
 async function persistLogs() {
-  const res = await fetch(`${DRIVE_UPLOAD}/${fileId}?uploadType=media`, {
+  const res = await driveFetch(`${DRIVE_UPLOAD}/${fileId}?uploadType=media`, {
     method: 'PATCH',
     headers: {
-      ...authHeaders(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ logs, checklist }, null, 2),
