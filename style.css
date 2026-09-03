@@ -688,7 +688,7 @@ textarea {
 .checklist-checkbox {
   width: 18px;
   height: 18px;
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   flex-shrink: 0;
   accent-color: var(--accent);
   cursor: pointer;
@@ -709,7 +709,7 @@ textarea {
 }
 
 .checklist-text {
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
@@ -721,10 +721,14 @@ textarea {
   color: var(--text-dim);
 }
 
+/* 아이콘 버튼 자체의 클릭 영역(32px)이 텍스트 첫 줄보다 크기 때문에,
+   버튼의 아이콘이 첫 줄 중앙에 오도록 살짝 위로 당겨 정렬한다.
+   flex-start 기준이라 여러 줄로 늘어나도 상단(첫 줄)에 고정된다. */
 .checklist-actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+  margin-top: -3px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;
@@ -734,11 +738,20 @@ textarea {
   pointer-events: auto;
 }
 
-/* 체크리스트 제자리(인라인) 수정 — 텍스트(span) 자리를 그대로 대체하는 입력창 */
+/* 체크리스트 제자리(인라인) 수정 — 텍스트(span) 자리를 그대로 대체하는 textarea */
 /* font-size 는 전역 input 기본값(16px)을 그대로 상속 — 16px 미만이면 iOS Safari에서 포커스 시 자동 확대됨 */
 .checklist-edit-input {
   flex: 1;
+  min-width: 0;
   width: auto;
   line-height: 1.55;
-  padding: 2px 6px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+}
+.checklist-edit-input:focus {
+  border-color: transparent;
 }

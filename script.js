@@ -1075,6 +1075,12 @@ function toggleChecklistEdit(id) {
   }
 }
 
+// textarea가 내용에 맞춰 자동으로 높이를 늘리도록(스크롤 없이) 조절한다.
+function autoResizeChecklistTextarea(textareaEl) {
+  textareaEl.style.height = 'auto';
+  textareaEl.style.height = `${textareaEl.scrollHeight}px`;
+}
+
 // 텍스트(span) 자리를 input으로 바꿔 그 자리에서 바로 수정할 수 있게 한다.
 function startChecklistEdit(id) {
   const card = getChecklistCard(id);
@@ -1087,6 +1093,7 @@ function startChecklistEdit(id) {
   inputEl.value = item.text;
   textEl.classList.add('hidden');
   inputEl.classList.remove('hidden');
+  autoResizeChecklistTextarea(inputEl);
   inputEl.focus();
   inputEl.select();
   clearTimeout(checklistCardHideTimer); // 편집 중엔 자동 숨김 타이머 정지
@@ -1358,7 +1365,7 @@ function renderChecklist() {
       <div class="checklist-content">
         <div class="checklist-row">
           <span class="checklist-text">${escapeHtml(c.text)}</span>
-          <input type="text" class="checklist-edit-input hidden" value="${escapeHtml(c.text)}">
+          <textarea class="checklist-edit-input hidden" rows="1">${escapeHtml(c.text)}</textarea>
           <span class="checklist-actions">
             <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1449,7 +1456,7 @@ checklistList.addEventListener('click', (e) => {
   if (item) toggleChecklistCardActions(item.dataset.id);
 });
 
-// 편집 입력창에서 Enter(저장) / Esc(취소) 처리
+// 편집 입력창에서 Enter(저장) / Shift+Enter(줄바꿈) / Esc(취소) 처리
 checklistList.addEventListener('keydown', (e) => {
   const inputEl = e.target.closest('.checklist-edit-input');
   if (!inputEl) return;
@@ -1457,7 +1464,7 @@ checklistList.addEventListener('keydown', (e) => {
   const id = item?.dataset.id;
   if (!id) return;
 
-  if (e.key === 'Enter') {
+  if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     commitChecklistEdit(id);
   } else if (e.key === 'Escape') {
@@ -1465,6 +1472,14 @@ checklistList.addEventListener('keydown', (e) => {
     inputEl.dataset.cancelled = 'true';
     cancelChecklistEdit(id);
   }
+  // Shift+Enter는 기본 동작(줄바꿈)을 그대로 둔다 — 이후 input 이벤트에서 높이가 재조절된다.
+});
+
+// 입력하는 대로 textarea 높이를 내용에 맞춰 늘린다 (줄바꿈 시 스크롤 없이 전체가 보이도록)
+checklistList.addEventListener('input', (e) => {
+  const inputEl = e.target.closest('.checklist-edit-input');
+  if (!inputEl) return;
+  autoResizeChecklistTextarea(inputEl);
 });
 
 // 편집 입력창 밖을 클릭/포커스 이동 시 자동 저장 (Esc로 취소된 경우는 건너뜀)
