@@ -1364,7 +1364,7 @@ function renderChecklist() {
       <label class="checklist-checkbox-wrap">
         <input type="checkbox" class="checklist-checkbox-input" ${c.done ? 'checked' : ''}>
         <span class="checklist-checkbox-box" aria-hidden="true">
-          <svg class="checklist-check-icon" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="checklist-check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </span>
