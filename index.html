@@ -60,8 +60,12 @@
 
       <section id="checklistSection" class="hidden">
         <section class="toolbar checklist-toolbar">
-          <input type="text" id="checklistInput">
-          <button class="icon-btn checklist-toolbar-spacer" tabindex="-1" aria-hidden="true"></button>
+          <textarea id="checklistInput" rows="1"></textarea>
+          <button id="checklistAddBtn" class="icon-btn" title="추가">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
           <button id="checklistMenuToggleBtn" class="icon-btn" title="설정" aria-expanded="false">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <line x1="4" y1="7" x2="20" y2="7"></line>

@@ -60,6 +60,7 @@ const emptyState = el('emptyState');
 
 const checklistSection = el('checklistSection');
 const checklistInput = el('checklistInput');
+const checklistAddBtn = el('checklistAddBtn');
 const checklistMenuToggleBtn = el('checklistMenuToggleBtn');
 const checklistSettingsMenu = el('checklistSettingsMenu');
 const checklistList = el('checklistList');
@@ -134,12 +135,8 @@ window.addEventListener('load', () => {
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
   checklistMenuToggleBtn.addEventListener('click', toggleChecklistSettingsMenu);
-  checklistInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleChecklistAdd();
-    }
-  });
+  checklistAddBtn.addEventListener('click', handleChecklistAdd);
+  checklistInput.addEventListener('input', () => autoResizeChecklistTextarea(checklistInput));
   applySavedTheme();
   updateChecklistFilterActiveUI();
   confirmModalCancelBtn.addEventListener('click', () => resolveConfirm(false));
@@ -968,6 +965,7 @@ async function handleChecklistAdd() {
     });
     await persistLogs();
     checklistInput.value = '';
+    autoResizeChecklistTextarea(checklistInput);
     renderChecklist();
   } catch (err) {
     console.error(err);
@@ -1034,7 +1032,6 @@ function closeChecklistCardActions() {
     card.classList.remove('actions-visible');
     const inputEl = card.querySelector('.checklist-edit-input');
     if (inputEl && !inputEl.classList.contains('hidden')) {
-      inputEl.dataset.cancelled = 'true';
       cancelChecklistEdit(activeChecklistCardId);
     }
   }
@@ -1059,7 +1056,20 @@ function toggleChecklistCardActions(id) {
   }
 }
 
-// 수정 아이콘 클릭 — 편집 중이 아니면 시작, 편집 중이면(다시 누르면) 취소
+// 수정 아이콘의 두 가지 상태(연필 ↔ 등록)를 그리는 SVG
+const CHECKLIST_EDIT_ICON = `
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20h9"></path>
+    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+  </svg>
+`;
+const CHECKLIST_CONFIRM_ICON = `
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+`;
+
+// 수정 아이콘 클릭 — 편집 중이 아니면 시작(아이콘이 등록 아이콘으로 바뀜), 편집 중이면 저장
 function toggleChecklistEdit(id) {
   const card = getChecklistCard(id);
   if (!card) return;
@@ -1068,8 +1078,7 @@ function toggleChecklistEdit(id) {
   const isEditing = !inputEl.classList.contains('hidden');
 
   if (isEditing) {
-    inputEl.dataset.cancelled = 'true';
-    cancelChecklistEdit(id);
+    commitChecklistEdit(id);
   } else {
     startChecklistEdit(id);
   }
@@ -1089,6 +1098,7 @@ function startChecklistEdit(id) {
   if (!item) return;
   const textEl = card.querySelector('.checklist-text');
   const inputEl = card.querySelector('.checklist-edit-input');
+  const editBtn = card.querySelector('button[data-action="edit"]');
 
   inputEl.value = item.text;
   textEl.classList.add('hidden');
@@ -1096,28 +1106,38 @@ function startChecklistEdit(id) {
   autoResizeChecklistTextarea(inputEl);
   inputEl.focus();
   inputEl.select();
+  if (editBtn) {
+    editBtn.innerHTML = CHECKLIST_CONFIRM_ICON;
+    editBtn.title = '등록';
+  }
   clearTimeout(checklistCardHideTimer); // 편집 중엔 자동 숨김 타이머 정지
 }
 
-// 저장 없이 편집을 닫고 원래 텍스트를 다시 보여준다.
+// 저장 없이 편집을 닫고 원래 텍스트를 다시 보여준다 (아이콘도 연필로 복원).
 function cancelChecklistEdit(id) {
   const card = getChecklistCard(id);
   if (!card) return;
   const textEl = card.querySelector('.checklist-text');
   const inputEl = card.querySelector('.checklist-edit-input');
+  const editBtn = card.querySelector('button[data-action="edit"]');
   if (!textEl || !inputEl) return;
   inputEl.classList.add('hidden');
   textEl.classList.remove('hidden');
+  if (editBtn) {
+    editBtn.innerHTML = CHECKLIST_EDIT_ICON;
+    editBtn.title = '수정';
+  }
   if (activeChecklistCardId === id) scheduleChecklistCardHide(id);
 }
 
-// Enter 또는 포커스 아웃 시 호출 — 값이 비었거나 변경이 없으면 저장하지 않는다.
+// 등록(확인) 아이콘 클릭 시 호출 — 값이 비었거나 변경이 없으면 저장하지 않는다.
+// 저장은 이 버튼을 통해서만 이뤄진다 (Enter=줄바꿈, 포커스 아웃으로는 저장되지 않음).
 async function commitChecklistEdit(id) {
   const card = getChecklistCard(id);
   if (!card) return;
   const inputEl = card.querySelector('.checklist-edit-input');
   if (!inputEl || inputEl.classList.contains('hidden')) return;
-  if (inputEl.dataset.committing === 'true') return; // 이미 저장 처리 중 (Enter로 이미 트리거된 경우 등)
+  if (inputEl.dataset.committing === 'true') return; // 이미 저장 처리 중
 
   const text = inputEl.value.trim();
   if (!text) {
@@ -1463,7 +1483,7 @@ checklistList.addEventListener('click', (e) => {
   if (item) toggleChecklistCardActions(item.dataset.id);
 });
 
-// 편집 입력창에서 Enter(저장) / Shift+Enter(줄바꿈) / Esc(취소) 처리
+// 편집 입력창에서 Esc(취소) 처리 — Enter는 항상 줄바꿈, 저장은 등록 아이콘 버튼으로만 수행
 checklistList.addEventListener('keydown', (e) => {
   const inputEl = e.target.closest('.checklist-edit-input');
   if (!inputEl) return;
@@ -1471,15 +1491,10 @@ checklistList.addEventListener('keydown', (e) => {
   const id = item?.dataset.id;
   if (!id) return;
 
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Escape') {
     e.preventDefault();
-    commitChecklistEdit(id);
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    inputEl.dataset.cancelled = 'true';
     cancelChecklistEdit(id);
   }
-  // Shift+Enter는 기본 동작(줄바꿈)을 그대로 둔다 — 이후 input 이벤트에서 높이가 재조절된다.
 });
 
 // 입력하는 대로 textarea 높이를 내용에 맞춰 늘린다 (줄바꿈 시 스크롤 없이 전체가 보이도록)
@@ -1487,19 +1502,6 @@ checklistList.addEventListener('input', (e) => {
   const inputEl = e.target.closest('.checklist-edit-input');
   if (!inputEl) return;
   autoResizeChecklistTextarea(inputEl);
-});
-
-// 편집 입력창 밖을 클릭/포커스 이동 시 자동 저장 (Esc로 취소된 경우는 건너뜀)
-checklistList.addEventListener('focusout', (e) => {
-  const inputEl = e.target.closest('.checklist-edit-input');
-  if (!inputEl) return;
-  if (inputEl.dataset.cancelled === 'true') {
-    delete inputEl.dataset.cancelled;
-    return;
-  }
-  const item = e.target.closest('.checklist-item');
-  const id = item?.dataset.id;
-  if (id) commitChecklistEdit(id);
 });
 
 checklistSettingsMenu.addEventListener('click', (e) => {
