@@ -222,6 +222,12 @@ textarea {
 .checklist-toolbar #checklistInput { flex: 1; }
 .checklist-toolbar #checklistMenuToggleBtn { flex-shrink: 0; }
 
+/* 검색 툴바와 동일한 3칸 구조(입력창/아이콘/아이콘)를 만들어 입력창 너비를 맞추기 위한 투명 스페이서 */
+.checklist-toolbar-spacer {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Settings menu (slide down between toolbar and list) */
 .settings-menu {
   overflow: hidden;
@@ -618,6 +624,14 @@ textarea {
 /* ==========================================================
    체크리스트 (Checklist)
    ========================================================== */
+
+/* 입력창 → 설정메뉴 → 리스트 사이 간격을 .view(검색창 → 설정메뉴 → 로그리스트)와 동일하게 맞춘다 */
+#checklistSection {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .checklist-list {
   display: flex;
   flex-direction: column;
@@ -629,18 +643,14 @@ textarea {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 14px;
+  padding: 8px 0;
   cursor: pointer;
-  transition: border-color 0.15s ease;
 }
 
 .checklist-checkbox {
   width: 18px;
   height: 18px;
-  margin-top: 2px;
+  margin: 2px 0 0;
   flex-shrink: 0;
   accent-color: var(--accent);
   cursor: pointer;
