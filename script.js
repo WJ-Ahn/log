@@ -1361,7 +1361,14 @@ function renderChecklist() {
     item.className = 'checklist-item' + (c.done ? ' done' : '');
     item.dataset.id = c.id;
     item.innerHTML = `
-      <input type="checkbox" class="checklist-checkbox" ${c.done ? 'checked' : ''}>
+      <label class="checklist-checkbox-wrap">
+        <input type="checkbox" class="checklist-checkbox-input" ${c.done ? 'checked' : ''}>
+        <span class="checklist-checkbox-box" aria-hidden="true">
+          <svg class="checklist-check-icon" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </span>
+      </label>
       <div class="checklist-content">
         <div class="checklist-row">
           <span class="checklist-text">${escapeHtml(c.text)}</span>
@@ -1434,14 +1441,14 @@ calendarGrid.addEventListener('click', (e) => {
 });
 
 checklistList.addEventListener('change', (e) => {
-  const checkbox = e.target.closest('.checklist-checkbox');
+  const checkbox = e.target.closest('.checklist-checkbox-input');
   if (!checkbox) return;
   const item = e.target.closest('.checklist-item');
   if (item) toggleChecklistDone(item.dataset.id, checkbox);
 });
 
 checklistList.addEventListener('click', (e) => {
-  if (e.target.classList.contains('checklist-checkbox')) return; // change 이벤트에서 처리
+  if (e.target.closest('.checklist-checkbox-wrap')) return; // change 이벤트에서 처리
   if (e.target.closest('.checklist-edit-input')) return; // 편집 중인 입력창 클릭은 카드 액션 토글과 무관하게 둔다
 
   const btn = e.target.closest('button[data-action]');
