@@ -24,7 +24,7 @@ let listCardHideTimer = null;  // 그 카드의 2초 자동 숨김 타이머
 
 let monthLabelPressStart = 0; // 월 라벨을 누르기 시작한 시각 (0이면 눌려있지 않음)
 
-let activeSubView = 'log';        // listView 내부 서브 화면: 'log' | 'checklist'
+let activeSubView = 'checklist';  // listView 내부 서브 화면: 'log' | 'checklist'
 let checklistFilter = 'pending';  // 체크리스트 필터: 'all' | 'pending' | 'done'
 let activeChecklistCardId = null; // 체크리스트에서 현재 아이콘이 노출된 항목의 id
 let checklistCardHideTimer = null; // 그 항목의 2초 자동 숨김 타이머
