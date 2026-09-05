@@ -174,7 +174,7 @@ window.addEventListener('load', () => {
 });
 
 function requestSignIn() {
-  tokenClient.requestAccessToken({ prompt: accessToken ? '' : 'consent' });
+  tokenClient.requestAccessToken({ prompt: '' });
 }
 
 async function onSignedIn() {
