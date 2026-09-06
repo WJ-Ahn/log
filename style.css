@@ -215,19 +215,7 @@ textarea {
   gap: 8px;
 }
 .toolbar #searchInput { flex: 1; }
-.toolbar #viewToggleBtn { flex-shrink: 0; }
 .toolbar #menuToggleBtn { flex-shrink: 0; }
-
-/* 체크리스트 상단 툴바 (검색창 툴바와 동일 레이아웃) */
-.checklist-toolbar #checklistInput { flex: 1; }
-.checklist-toolbar #checklistAddBtn { flex-shrink: 0; }
-.checklist-toolbar #checklistMenuToggleBtn { flex-shrink: 0; }
-
-/* 체크리스트 입력창 — 내용에 맞춰 JS로 높이를 늘리므로 수동 리사이즈는 막는다 */
-#checklistInput {
-  resize: none;
-  overflow: hidden;
-}
 
 /* Settings menu (slide down between toolbar and list) */
 .settings-menu {
@@ -257,12 +245,6 @@ textarea {
 .settings-menu-item:last-child { border-bottom: none; }
 .settings-menu-item:active { background: var(--hover-bg); }
 .settings-menu-item svg { flex-shrink: 0; color: var(--text-dim); }
-
-/* 체크리스트 필터 항목 — 현재 선택된 필터 강조 */
-.checklist-filter-item.active {
-  color: var(--accent);
-  font-weight: 700;
-}
 
 /* Log list */
 .log-list {
@@ -658,137 +640,4 @@ textarea {
   color: var(--text);
   white-space: pre-wrap;
   flex: 1;
-}
-
-/* ==========================================================
-   체크리스트 (Checklist)
-   ========================================================== */
-
-/* 입력창 → 설정메뉴 → 리스트 사이 간격을 .view(검색창 → 설정메뉴 → 로그리스트)와 동일하게 맞춘다 */
-#checklistSection {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.checklist-list {
-  display: flex;
-  flex-direction: column;
-  padding-bottom: 64px;
-}
-
-.checklist-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 0;
-  cursor: pointer;
-}
-
-.checklist-checkbox-wrap {
-  position: relative;
-  width: 16px;
-  height: 16px;
-  margin-top: 4px;
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.checklist-checkbox-input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.checklist-checkbox-box {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px solid var(--input-border);
-  border-radius: 4px;
-  color: var(--bg);
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.checklist-checkbox-input:checked ~ .checklist-checkbox-box {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.checklist-check-icon {
-  opacity: 0;
-  transition: opacity 0.1s ease;
-}
-
-.checklist-checkbox-input:checked ~ .checklist-checkbox-box .checklist-check-icon {
-  opacity: 1;
-}
-
-.checklist-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.checklist-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.checklist-text {
-  font-size: 1rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-  flex: 1;
-}
-
-.checklist-item.done .checklist-text {
-  text-decoration: line-through;
-  color: var(--text-dim);
-}
-
-/* 아이콘 버튼 자체의 클릭 영역(32px)이 텍스트 첫 줄보다 크기 때문에,
-   버튼의 아이콘이 첫 줄 중앙에 오도록 살짝 위로 당겨 정렬한다.
-   flex-start 기준이라 여러 줄로 늘어나도 상단(첫 줄)에 고정된다. */
-.checklist-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-top: -3px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-.checklist-item.actions-visible .checklist-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* 체크리스트 제자리(인라인) 수정 — 텍스트(span) 자리를 그대로 대체하는 textarea */
-/* font-size 는 전역 input 기본값(16px)을 그대로 상속 — 16px 미만이면 iOS Safari에서 포커스 시 자동 확대됨 */
-.checklist-edit-input {
-  flex: 1;
-  min-width: 0;
-  width: auto;
-  line-height: 1.55;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: transparent;
-  resize: none;
-  overflow: hidden;
-}
-.checklist-edit-input:focus {
-  border-color: transparent;
 }
