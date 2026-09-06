@@ -14,7 +14,6 @@ let accessToken = null;
 let tokenClient = null;
 let fileId = null;      // logs.json 의 구글 드라이브 파일 ID
 let logs = [];          // 메모리 상의 로그 배열
-let checklist = [];     // 메모리 상의 체크리스트 배열
 let selectedCalDate = null; // 캘린더뷰에서 작성창이 열려있는 날짜 (없으면 null)
 let calEditingId = null;    // 작성창이 수정 모드일 때 대상 로그의 id (생성 모드면 null)
 let calEntryTimeBeforeEdit = ''; // calEntryTime 포커스 시 비우기 전의 원래 값
@@ -24,11 +23,6 @@ let activeListCardId = null;   // 리스트뷰에서 현재 아이콘이 노출�
 let listCardHideTimer = null;  // 그 카드의 2초 자동 숨김 타이머
 
 let monthLabelPressStart = 0; // 월 라벨을 누르기 시작한 시각 (0이면 눌려있지 않음)
-
-let activeSubView = 'checklist';  // listView 내부 서브 화면: 'log' | 'checklist'
-let checklistFilter = 'pending';  // 체크리스트 필터: 'all' | 'pending' | 'done'
-let activeChecklistCardId = null; // 체크리스트에서 현재 아이콘이 노출된 항목의 id
-let checklistCardHideTimer = null; // 그 항목의 2초 자동 숨김 타이머
 
 // 토큰 자동 재발급(silent refresh)이 진행 중일 때 그 결과를 기다리는 resolve/reject 쌍
 // (tokenClient의 callback은 초기화 시 한 번만 등록되므로, 일반 로그인과 조용한 재발급을 이 변수로 구분한다)
@@ -50,7 +44,6 @@ const confirmModalCancelBtn = el('confirmModalCancelBtn');
 const confirmModalOkBtn = el('confirmModalOkBtn');
 
 const searchInput = el('searchInput');
-const viewToggleBtn = el('viewToggleBtn');
 const refreshBtn = el('refreshBtn');
 const menuToggleBtn = el('menuToggleBtn');
 const settingsMenu = el('settingsMenu');
@@ -62,14 +55,6 @@ const viewNextBtn = el('viewNextBtn');
 const logSection = el('logSection');
 const logList = el('logList');
 const emptyState = el('emptyState');
-
-const checklistSection = el('checklistSection');
-const checklistInput = el('checklistInput');
-const checklistAddBtn = el('checklistAddBtn');
-const checklistMenuToggleBtn = el('checklistMenuToggleBtn');
-const checklistSettingsMenu = el('checklistSettingsMenu');
-const checklistList = el('checklistList');
-const checklistEmptyState = el('checklistEmptyState');
 
 const calendarView = el('calendarView');
 const calPrevBtn = el('calPrevBtn');
@@ -131,12 +116,10 @@ window.addEventListener('load', () => {
     closeSettingsMenu();
   });
   searchInput.addEventListener('input', () => {
-    if (activeSubView === 'checklist') renderChecklist();
-    else renderList();
+    renderList();
   });
   viewPrevBtn.addEventListener('click', goPrevView);
   viewNextBtn.addEventListener('click', goNextView);
-  viewToggleBtn.addEventListener('click', toggleSubView);
   calPrevBtn.addEventListener('click', () => changeMonth(-1));
   calNextBtn.addEventListener('click', () => changeMonth(1));
   calMonthLabel.addEventListener('pointerdown', handleMonthLabelPointerDown);
@@ -154,11 +137,7 @@ window.addEventListener('load', () => {
   calEntryTime.addEventListener('blur', handleCalTimeBlur);
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
-  checklistMenuToggleBtn.addEventListener('click', toggleChecklistSettingsMenu);
-  checklistAddBtn.addEventListener('click', handleChecklistAdd);
-  checklistInput.addEventListener('input', () => autoResizeChecklistTextarea(checklistInput));
   applySavedTheme();
-  updateChecklistFilterActiveUI();
   confirmModalCancelBtn.addEventListener('click', () => resolveConfirm(false));
   confirmModalOkBtn.addEventListener('click', () => resolveConfirm(true));
   confirmModal.addEventListener('click', (e) => {
@@ -269,8 +248,6 @@ function switchToView(name) {
   if (name !== 'list') {
     closeListCardActions();
     closeSettingsMenu();
-    closeChecklistCardActions();
-    closeChecklistSettingsMenu();
   }
   closeCalMonthInput();
   listView.classList.add('hidden');
@@ -303,31 +280,6 @@ function changeMonth(delta) {
     calState.year += 1;
   }
   renderCalendar();
-}
-
-/* ==========================================================
-   리스트뷰 내부 서브 화면 전환 (로그 구역 ↔ 체크리스트 구역)
-   — 상단 검색 툴바(검색창/설정 버튼)는 항상 유지되고 아래 영역만 교체된다
-   ========================================================== */
-function switchSubView(name) {
-  activeSubView = name;
-  if (name === 'checklist') {
-    closeListCardActions();
-    closeSettingsMenu();
-    logSection.classList.add('hidden');
-    checklistSection.classList.remove('hidden');
-    renderChecklist();
-  } else {
-    closeChecklistCardActions();
-    closeChecklistSettingsMenu();
-    checklistSection.classList.add('hidden');
-    logSection.classList.remove('hidden');
-    renderList();
-  }
-}
-
-function toggleSubView() {
-  switchSubView(activeSubView === 'log' ? 'checklist' : 'log');
 }
 
 /* ==========================================================
@@ -452,7 +404,7 @@ async function ensureLogFile() {
     `${JSON.stringify(metadata)}\r\n` +
     `--${boundary}\r\n` +
     `Content-Type: application/json\r\n\r\n` +
-    `{"logs":[],"checklist":[]}\r\n` +
+    `{"logs":[]}\r\n` +
     `--${boundary}--`;
 
   const createRes = await driveFetch(
@@ -482,24 +434,25 @@ async function loadLogs(manual = false) {
     if (text.trim()) {
       parsed = JSON.parse(text);
     } else {
-      parsed = { logs: [], checklist: [] };
+      parsed = { logs: [] };
     }
 
-    // 기존 파일이 로그 배열만 있던 옛 형식이면 { logs, checklist } 형태로 변환한다.
+    // 기존 파일이 로그 배열만 있던 옛 형식이거나, checklist 필드가 아직 남아있는 옛 형식이면
+    // { logs } 형태로 정리한다 (checklist 기능 제거로 더 이상 필요 없는 필드).
     let needsMigration = false;
     if (Array.isArray(parsed)) {
       logs = parsed;
-      checklist = [];
       needsMigration = true;
     } else {
       logs = parsed.logs || [];
-      checklist = parsed.checklist || [];
+      if (Object.prototype.hasOwnProperty.call(parsed, 'checklist')) {
+        needsMigration = true;
+      }
     }
 
     logsLoaded = true;
     renderList();
     renderCalendar();
-    renderChecklist();
     if (manual) showStatus('불러왔어요');
 
     if (needsMigration) {
@@ -521,13 +474,13 @@ async function persistLogs() {
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ logs, checklist }, null, 2),
+    body: JSON.stringify({ logs }, null, 2),
   });
   if (!res.ok) throw new Error('저장 실패');
 }
 
 /* ==========================================================
-   삭제 공용 로직 (리스트뷰 / 캘린더뷰 공용)
+   삭제 공용 로직
    ========================================================== */
 // 확인창 없이 실제 삭제 + 저장만 수행. 성공적으로 지워졌으면 true 반환.
 async function removeLogById(id) {
@@ -1067,245 +1020,6 @@ async function handleInlineEditSave(id) {
 }
 
 /* ==========================================================
-   체크리스트 — 추가 / 완료토글 / 인라인 수정 / 삭제
-   — 카드 인터랙션(클릭 시 아이콘 노출, 2초 자동 숨김)은 로그 리스트 방식을 그대로 따른다
-   ========================================================== */
-async function handleChecklistAdd() {
-  const text = checklistInput.value.trim();
-  if (!text) return;
-
-  checklistInput.disabled = true;
-  try {
-    checklist.unshift({
-      id: crypto.randomUUID(),
-      text,
-      done: false,
-      createdAt: Date.now(),
-    });
-    await persistLogs();
-    checklistInput.value = '';
-    autoResizeChecklistTextarea(checklistInput);
-    renderChecklist();
-  } catch (err) {
-    console.error(err);
-    showStatus('추가 중 문제가 발생했어요', true);
-  } finally {
-    checklistInput.disabled = false;
-  }
-}
-
-async function toggleChecklistDone(id, checkboxEl) {
-  const item = checklist.find((c) => c.id === id);
-  if (!item) return;
-  const prev = item.done;
-  item.done = !item.done;
-  checkboxEl.disabled = true;
-  try {
-    await persistLogs();
-    renderChecklist();
-  } catch (err) {
-    console.error(err);
-    item.done = prev;
-    checkboxEl.checked = prev;
-    showStatus('저장 중 문제가 발생했어요', true);
-  } finally {
-    checkboxEl.disabled = false;
-  }
-}
-
-async function deleteChecklistItem(id) {
-  if (!(await askConfirm('이 항목을 삭제할까요?'))) return;
-  try {
-    const before = checklist.length;
-    checklist = checklist.filter((c) => c.id !== id);
-    if (checklist.length === before) return;
-    await persistLogs();
-    showStatus('삭제했어요');
-    renderChecklist();
-  } catch (err) {
-    console.error(err);
-    showStatus('삭제 중 문제가 발생했어요', true);
-  }
-}
-
-function getChecklistCard(id) {
-  return checklistList.querySelector(`.checklist-item[data-id="${id}"]`);
-}
-
-function scheduleChecklistCardHide(id) {
-  clearTimeout(checklistCardHideTimer);
-  checklistCardHideTimer = setTimeout(() => {
-    const card = getChecklistCard(id);
-    if (!card) return;
-    const editingOpen = !card.querySelector('.checklist-edit-input')?.classList.contains('hidden');
-    if (editingOpen) return;
-    closeChecklistCardActions();
-  }, 2000);
-}
-
-function closeChecklistCardActions() {
-  clearTimeout(checklistCardHideTimer);
-  if (!activeChecklistCardId) return;
-  const card = getChecklistCard(activeChecklistCardId);
-  if (card) {
-    card.classList.remove('actions-visible');
-    const inputEl = card.querySelector('.checklist-edit-input');
-    if (inputEl && !inputEl.classList.contains('hidden')) {
-      cancelChecklistEdit(activeChecklistCardId);
-    }
-  }
-  activeChecklistCardId = null;
-}
-
-function openChecklistCardActions(id) {
-  if (activeChecklistCardId && activeChecklistCardId !== id) {
-    closeChecklistCardActions();
-  }
-  activeChecklistCardId = id;
-  const card = getChecklistCard(id);
-  if (card) card.classList.add('actions-visible');
-  scheduleChecklistCardHide(id);
-}
-
-function toggleChecklistCardActions(id) {
-  if (activeChecklistCardId === id) {
-    closeChecklistCardActions();
-  } else {
-    openChecklistCardActions(id);
-  }
-}
-
-// 수정 아이콘의 두 가지 상태(연필 ↔ 등록)를 그리는 SVG
-const CHECKLIST_EDIT_ICON = `
-  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 20h9"></path>
-    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-  </svg>
-`;
-const CHECKLIST_CONFIRM_ICON = `
-  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="20 6 9 17 4 12"></polyline>
-  </svg>
-`;
-
-// 수정 아이콘 클릭 — 편집 중이 아니면 시작(아이콘이 등록 아이콘으로 바뀜), 편집 중이면 저장
-function toggleChecklistEdit(id) {
-  const card = getChecklistCard(id);
-  if (!card) return;
-  const inputEl = card.querySelector('.checklist-edit-input');
-  if (!inputEl) return;
-  const isEditing = !inputEl.classList.contains('hidden');
-
-  if (isEditing) {
-    commitChecklistEdit(id);
-  } else {
-    startChecklistEdit(id);
-  }
-}
-
-// textarea가 내용에 맞춰 자동으로 높이를 늘리도록(스크롤 없이) 조절한다.
-function autoResizeChecklistTextarea(textareaEl) {
-  textareaEl.style.height = 'auto';
-  textareaEl.style.height = `${textareaEl.scrollHeight}px`;
-}
-
-// 텍스트(span) 자리를 input으로 바꿔 그 자리에서 바로 수정할 수 있게 한다.
-function startChecklistEdit(id) {
-  const card = getChecklistCard(id);
-  if (!card) return;
-  const item = checklist.find((c) => c.id === id);
-  if (!item) return;
-  const textEl = card.querySelector('.checklist-text');
-  const inputEl = card.querySelector('.checklist-edit-input');
-  const editBtn = card.querySelector('button[data-action="edit"]');
-
-  inputEl.value = item.text;
-  textEl.classList.add('hidden');
-  inputEl.classList.remove('hidden');
-  autoResizeChecklistTextarea(inputEl);
-  inputEl.focus();
-  inputEl.select();
-  if (editBtn) {
-    editBtn.innerHTML = CHECKLIST_CONFIRM_ICON;
-    editBtn.title = '등록';
-  }
-  clearTimeout(checklistCardHideTimer); // 편집 중엔 자동 숨김 타이머 정지
-}
-
-// 저장 없이 편집을 닫고 원래 텍스트를 다시 보여준다 (아이콘도 연필로 복원).
-function cancelChecklistEdit(id) {
-  const card = getChecklistCard(id);
-  if (!card) return;
-  const textEl = card.querySelector('.checklist-text');
-  const inputEl = card.querySelector('.checklist-edit-input');
-  const editBtn = card.querySelector('button[data-action="edit"]');
-  if (!textEl || !inputEl) return;
-  inputEl.classList.add('hidden');
-  textEl.classList.remove('hidden');
-  if (editBtn) {
-    editBtn.innerHTML = CHECKLIST_EDIT_ICON;
-    editBtn.title = '수정';
-  }
-  if (activeChecklistCardId === id) scheduleChecklistCardHide(id);
-}
-
-// 등록(확인) 아이콘 클릭 시 호출 — 값이 비었거나 변경이 없으면 저장하지 않는다.
-// 저장은 이 버튼을 통해서만 이뤄진다 (Enter=줄바꿈, 포커스 아웃으로는 저장되지 않음).
-async function commitChecklistEdit(id) {
-  const card = getChecklistCard(id);
-  if (!card) return;
-  const inputEl = card.querySelector('.checklist-edit-input');
-  if (!inputEl || inputEl.classList.contains('hidden')) return;
-  if (inputEl.dataset.committing === 'true') return; // 이미 저장 처리 중
-
-  const text = inputEl.value.trim();
-  if (!text) {
-    showStatus('내용을 입력해주세요', true);
-    return;
-  }
-
-  const item = checklist.find((c) => c.id === id);
-  if (!item) return;
-  if (item.text === text) {
-    cancelChecklistEdit(id);
-    return;
-  }
-
-  inputEl.dataset.committing = 'true';
-  inputEl.disabled = true;
-  try {
-    item.text = text;
-    await persistLogs();
-    showStatus('수정했어요');
-    renderChecklist();
-  } catch (err) {
-    console.error(err);
-    showStatus('저장 중 문제가 발생했어요', true);
-    inputEl.disabled = false;
-    delete inputEl.dataset.committing;
-  }
-}
-
-/* ==========================================================
-   체크리스트 설정 메뉴 (전체보기 / 미완료 보기 / 완료보기)
-   ========================================================== */
-function toggleChecklistSettingsMenu() {
-  const open = checklistSettingsMenu.classList.toggle('open');
-  checklistMenuToggleBtn.setAttribute('aria-expanded', String(open));
-}
-
-function closeChecklistSettingsMenu() {
-  checklistSettingsMenu.classList.remove('open');
-  checklistMenuToggleBtn.setAttribute('aria-expanded', 'false');
-}
-
-function updateChecklistFilterActiveUI() {
-  checklistSettingsMenu.querySelectorAll('.checklist-filter-item').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.filter === checklistFilter);
-  });
-}
-
-/* ==========================================================
    렌더링
    ========================================================== */
 function renderCalendar() {
@@ -1475,67 +1189,6 @@ function renderList() {
   });
 }
 
-// 체크리스트 렌더링 — 상태 필터(전체/미완료/완료)를 먼저 적용한 뒤, 검색어가 있으면 본문 기준으로 한 번 더 좁힌다.
-// 정렬은 등록 시점(createdAt) 기준 최신순.
-function renderChecklist() {
-  clearTimeout(checklistCardHideTimer);
-  activeChecklistCardId = null;
-
-  let base = checklist.slice();
-  if (checklistFilter === 'pending') base = base.filter((c) => !c.done);
-  else if (checklistFilter === 'done') base = base.filter((c) => c.done);
-
-  const query = searchInput.value.trim().toLowerCase();
-  if (query) {
-    base = base.filter((c) => c.text.toLowerCase().includes(query));
-  }
-
-  base.sort((a, b) => b.createdAt - a.createdAt);
-
-  checklistList.innerHTML = '';
-  checklistEmptyState.classList.toggle('hidden', base.length > 0);
-
-  base.forEach((c) => {
-    const item = document.createElement('div');
-    item.className = 'checklist-item' + (c.done ? ' done' : '');
-    item.dataset.id = c.id;
-    item.innerHTML = `
-      <label class="checklist-checkbox-wrap">
-        <input type="checkbox" class="checklist-checkbox-input" ${c.done ? 'checked' : ''}>
-        <span class="checklist-checkbox-box" aria-hidden="true">
-          <svg class="checklist-check-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </span>
-      </label>
-      <div class="checklist-content">
-        <div class="checklist-row">
-          <span class="checklist-text">${escapeHtml(c.text)}</span>
-          <textarea class="checklist-edit-input hidden" rows="1">${escapeHtml(c.text)}</textarea>
-          <span class="checklist-actions">
-            <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-              </svg>
-            </button>
-            <button class="icon-btn danger" data-action="delete" data-id="${c.id}" title="삭제">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path>
-                <path d="M10 11v6"></path>
-                <path d="M14 11v6"></path>
-                <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path>
-              </svg>
-            </button>
-          </span>
-        </div>
-      </div>
-    `;
-    checklistList.appendChild(item);
-  });
-}
-
 logList.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-action]');
   if (btn) {
@@ -1605,57 +1258,4 @@ calendarGrid.addEventListener('click', (e) => {
   } else {
     openCalComposer(dateStr);
   }
-});
-
-checklistList.addEventListener('change', (e) => {
-  const checkbox = e.target.closest('.checklist-checkbox-input');
-  if (!checkbox) return;
-  const item = e.target.closest('.checklist-item');
-  if (item) toggleChecklistDone(item.dataset.id, checkbox);
-});
-
-checklistList.addEventListener('click', (e) => {
-  if (e.target.closest('.checklist-checkbox-wrap')) return; // change 이벤트에서 처리
-  if (e.target.closest('.checklist-edit-input')) return; // 편집 중인 입력창 클릭은 카드 액션 토글과 무관하게 둔다
-
-  const btn = e.target.closest('button[data-action]');
-  if (btn) {
-    const action = btn.dataset.action;
-    const id = btn.dataset.id;
-    if (action === 'edit') toggleChecklistEdit(id);
-    else if (action === 'delete') deleteChecklistItem(id);
-    return;
-  }
-  const item = e.target.closest('.checklist-item');
-  if (item) toggleChecklistCardActions(item.dataset.id);
-});
-
-// 편집 입력창에서 Esc(취소) 처리 — Enter는 항상 줄바꿈, 저장은 등록 아이콘 버튼으로만 수행
-checklistList.addEventListener('keydown', (e) => {
-  const inputEl = e.target.closest('.checklist-edit-input');
-  if (!inputEl) return;
-  const item = e.target.closest('.checklist-item');
-  const id = item?.dataset.id;
-  if (!id) return;
-
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    cancelChecklistEdit(id);
-  }
-});
-
-// 입력하는 대로 textarea 높이를 내용에 맞춰 늘린다 (줄바꿈 시 스크롤 없이 전체가 보이도록)
-checklistList.addEventListener('input', (e) => {
-  const inputEl = e.target.closest('.checklist-edit-input');
-  if (!inputEl) return;
-  autoResizeChecklistTextarea(inputEl);
-});
-
-checklistSettingsMenu.addEventListener('click', (e) => {
-  const btn = e.target.closest('.checklist-filter-item');
-  if (!btn) return;
-  checklistFilter = btn.dataset.filter;
-  updateChecklistFilterActiveUI();
-  closeChecklistSettingsMenu();
-  renderChecklist();
 });
