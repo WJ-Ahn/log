@@ -201,6 +201,13 @@ textarea {
   line-height: 1.5;
 }
 
+/* 자동 높이 조절 textarea — JS에서 scrollHeight만큼 height를 직접 설정하므로
+   수동 드래그 리사이즈 핸들과 세로 스크롤바는 감춘다 */
+textarea.autosize {
+  resize: none;
+  overflow: hidden;
+}
+
 /* Memo input (composer/edit 공용) */
 .memo-textarea {
   color: var(--text-dim);

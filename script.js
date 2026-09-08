@@ -135,6 +135,8 @@ window.addEventListener('load', () => {
   calDeleteBtn.addEventListener('click', handleCalDelete);
   calEntryTime.addEventListener('focus', handleCalTimeFocus);
   calEntryTime.addEventListener('blur', handleCalTimeBlur);
+  calEntryBody.addEventListener('input', () => autoResizeTextarea(calEntryBody));
+  calEntryMemo.addEventListener('input', () => autoResizeTextarea(calEntryMemo));
   menuToggleBtn.addEventListener('click', toggleSettingsMenu);
   themeToggleBtn.addEventListener('click', toggleTheme);
   applySavedTheme();
@@ -341,6 +343,17 @@ function resolveConfirm(result) {
     confirmResolver(result);
     confirmResolver = null;
   }
+}
+
+/* ==========================================================
+   textarea 자동 높이 조절
+   — 4곳(calEntryBody, calEntryMemo, .edit-body, .edit-memo)에서 공용으로 사용.
+   — height를 auto로 먼저 초기화해야 내용이 줄어들 때도 scrollHeight가 다시 줄어든 값으로 계산된다.
+   ========================================================== */
+function autoResizeTextarea(ta) {
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
 }
 
 /* ==========================================================
@@ -686,6 +699,8 @@ function openCalComposer(dateStr) {
   calEntryTime.classList.remove('invalid');
   calEntryBody.value = '';
   calEntryMemo.value = '';
+  autoResizeTextarea(calEntryBody);
+  autoResizeTextarea(calEntryMemo);
   calSaveBtn.textContent = '등록';
   calDeleteBtn.classList.add('hidden');
   calComposer.classList.add('open');
@@ -710,6 +725,8 @@ function openCalComposerForEdit(logId) {
   calEntryTime.classList.remove('invalid');
   calEntryBody.value = log.body;
   calEntryMemo.value = log.memo || '';
+  autoResizeTextarea(calEntryBody);
+  autoResizeTextarea(calEntryMemo);
   calSaveBtn.textContent = '수정 완료';
   calDeleteBtn.classList.remove('hidden');
   calComposer.classList.add('open');
@@ -723,6 +740,8 @@ function closeCalComposer() {
   calComposer.classList.remove('open');
   calEntryBody.value = '';
   calEntryMemo.value = '';
+  autoResizeTextarea(calEntryBody);
+  autoResizeTextarea(calEntryMemo);
   calEntryTime.classList.remove('invalid');
   calSaveBtn.textContent = '등록';
   calDeleteBtn.classList.add('hidden');
@@ -970,6 +989,8 @@ function toggleListEdit(id) {
       editEl.querySelector('.edit-time').classList.remove('invalid');
       editEl.querySelector('.edit-body').value = log.body;
       editEl.querySelector('.edit-memo').value = log.memo || '';
+      autoResizeTextarea(editEl.querySelector('.edit-body'));
+      autoResizeTextarea(editEl.querySelector('.edit-memo'));
     }
     editEl.classList.add('open');
     clearTimeout(listCardHideTimer); // 수정창 열려있는 동안 타이머 정지
@@ -1176,8 +1197,8 @@ function renderList() {
             <input type="date" class="mono-input edit-date">
             <input type="text" class="mono-input edit-time" inputmode="numeric" placeholder="0000" maxlength="5">
           </div>
-          <textarea class="edit-body" rows="3"></textarea>
-          <textarea class="memo-textarea edit-memo" rows="2"></textarea>
+          <textarea class="edit-body autosize" rows="3"></textarea>
+          <textarea class="memo-textarea edit-memo autosize" rows="2"></textarea>
           <div class="log-edit-actions">
             <button class="btn-ghost small" data-action="cancel-edit" data-id="${l.id}">취소</button>
             <button class="btn-primary small" data-action="save-edit" data-id="${l.id}">수정 완료</button>
@@ -1230,6 +1251,13 @@ logList.addEventListener('focusout', (e) => {
   } else {
     timeInput.classList.add('invalid');
   }
+});
+
+// 리스트뷰 인라인 수정창의 본문/메모 textarea — 입력할 때마다 줄 수에 맞춰 높이를 다시 계산한다.
+// 요소가 동적으로 생성/교체되므로 logList에 이벤트 위임으로 붙인다.
+logList.addEventListener('input', (e) => {
+  const ta = e.target.closest('.edit-body, .edit-memo');
+  if (ta) autoResizeTextarea(ta);
 });
 
 calendarLogList.addEventListener('click', (e) => {
